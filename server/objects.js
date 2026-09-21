@@ -6,6 +6,12 @@ const YAML_EXTENSIONS = ['.yaml', '.yml']
 const SEGMENT = '[A-Za-z0-9][A-Za-z0-9._-]*'
 const NAME_PATTERN = new RegExp(`^${SEGMENT}(/${SEGMENT})*\\.ya?ml$`)
 
+export function resolveObjectsDir(root, configured = process.env.OBJECTS_DIR) {
+  const value = typeof configured === 'string' ? configured.trim() : ''
+  if (!value) return path.resolve(root, 'objects')
+  return path.isAbsolute(value) ? path.resolve(value) : path.resolve(root, value)
+}
+
 export class ObjectsError extends Error {
   constructor(status, message, details = {}) {
     super(message)

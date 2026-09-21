@@ -16,6 +16,7 @@ import {
 import { AttributesPanel } from '@/components/panels/AttributesPanel'
 import { Breadcrumb } from '@/components/panels/Breadcrumb'
 import { ConflictDialog } from '@/components/ConflictDialog'
+import { ExplorerPanel } from '@/components/panels/ExplorerPanel'
 import { GraphView } from '@/components/graph/GraphView'
 import { NewObjectDialog } from '@/components/NewObjectDialog'
 import { FormulaPanel } from '@/components/panels/FormulaPanel'
@@ -106,7 +107,7 @@ export default function Workspace() {
 
   const [panelWidth, setPanelWidth] = useState(380)
   const [collapsed, setCollapsed] = useState(false)
-  const [namespace, setNamespace] = useState(null)
+  const [selectedObjects, setSelectedObjects] = useState(() => new Set())
 
   useEffect(() => {
     refresh()
@@ -115,16 +116,6 @@ export default function Workspace() {
   const index = useMemo(() => buildIndex(entries), [entries])
   const issues = useMemo(() => validateReferences(entries), [entries])
   const resolved = useMemo(() => resolveSelection(entries, selection), [entries, selection])
-
-  const namespaces = useMemo(() => {
-    const set = new Set()
-    for (const entry of entries) {
-      if (entry.namespace) set.add(entry.namespace)
-    }
-    return [...set].sort()
-  }, [entries])
-
-  const activeNamespace = namespace && namespaces.includes(namespace) ? namespace : null
 
   const startResize = (event) => {
     event.preventDefault()
@@ -152,38 +143,6 @@ export default function Workspace() {
         </div>
         <Separator orientation="vertical" className="h-5" />
         <StatusBadge status={status} message={message} />
-        {namespaces.length > 0 ? (
-          <>
-            <Separator orientation="vertical" className="h-5" />
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={() => setNamespace(null)}
-                className={`rounded px-2 py-1 text-xs transition-colors ${
-                  activeNamespace === null
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:bg-accent'
-                }`}
-              >
-                All
-              </button>
-              {namespaces.map((item) => (
-                <button
-                  key={item}
-                  type="button"
-                  onClick={() => setNamespace(item)}
-                  className={`rounded px-2 py-1 text-xs transition-colors ${
-                    activeNamespace === item
-                      ? 'bg-primary text-primary-foreground'
-                      : 'text-muted-foreground hover:bg-accent'
-                  }`}
-                >
-                  {item}
-                </button>
-              ))}
-            </div>
-          </>
-        ) : null}
         <div className="flex-1" />
         <IssuesDialog issues={issues} />
         <Button variant="outline" size="sm" onClick={refresh}>
@@ -209,12 +168,17 @@ export default function Workspace() {
       </header>
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
+        <ExplorerPanel
+          entries={entries}
+          selectedObjects={selectedObjects}
+          onChange={setSelectedObjects}
+        />
         <main className="h-full min-h-0 flex-1 overflow-hidden">
           <GraphView
             entries={entries}
             selection={selection}
             onSelect={select}
-            namespace={activeNamespace}
+            selectedObjects={selectedObjects}
           />
         </main>
 

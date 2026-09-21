@@ -1,5 +1,4 @@
-import path from 'node:path'
-import { ObjectsError, createObjectsRepository } from '../server/objects.js'
+import { ObjectsError, createObjectsRepository, resolveObjectsDir } from '../server/objects.js'
 
 const PREFIX = '/api/objects'
 const BODY_LIMIT = 5 * 1024 * 1024
@@ -41,8 +40,8 @@ function send(res, status, payload) {
   res.end(body)
 }
 
-export function createObjectsMiddleware({ root }) {
-  const repository = createObjectsRepository(path.resolve(root, 'objects'))
+export function createObjectsMiddleware({ root, objectsDir }) {
+  const repository = createObjectsRepository(objectsDir ?? resolveObjectsDir(root))
 
   return async function objectsMiddleware(req, res, next) {
     const url = new URL(req.url, 'http://localhost')
@@ -109,15 +108,15 @@ export function createObjectsMiddleware({ root }) {
   }
 }
 
-export function objectsApiPlugin() {
+export function objectsApiPlugin(options = {}) {
   return {
     name: 'data-flow:objects-api',
     configureServer(server) {
-      const middleware = createObjectsMiddleware({ root: server.config.root })
+      const middleware = createObjectsMiddleware({ root: server.config.root, ...options })
       server.middlewares.use(middleware)
     },
     configurePreviewServer(server) {
-      const middleware = createObjectsMiddleware({ root: server.config.root })
+      const middleware = createObjectsMiddleware({ root: server.config.root, ...options })
       server.middlewares.use(middleware)
     },
   }

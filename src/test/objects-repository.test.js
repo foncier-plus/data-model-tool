@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { createObjectsRepository } from '../../server/objects.js'
+import { createObjectsRepository, resolveObjectsDir } from '../../server/objects.js'
 
 const dirs = []
 
@@ -14,6 +14,41 @@ async function repository() {
 
 afterEach(async () => {
   await Promise.all(dirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })))
+})
+
+describe('resolveObjectsDir', () => {
+  const root = '/project'
+
+  it('defaults to <root>/objects', () => {
+    const previous = process.env.OBJECTS_DIR
+    delete process.env.OBJECTS_DIR
+    try {
+      expect(resolveObjectsDir(root, '')).toBe('/project/objects')
+      expect(resolveObjectsDir(root, undefined)).toBe('/project/objects')
+    } finally {
+      if (previous !== undefined) process.env.OBJECTS_DIR = previous
+    }
+  })
+
+  it('resolves a relative path against the root', () => {
+    expect(resolveObjectsDir(root, '../shared/objects')).toBe('/shared/objects')
+    expect(resolveObjectsDir(root, 'model')).toBe('/project/model')
+  })
+
+  it('keeps an absolute path as-is', () => {
+    expect(resolveObjectsDir(root, '/data/objects')).toBe('/data/objects')
+  })
+
+  it('falls back to process.env.OBJECTS_DIR', () => {
+    const previous = process.env.OBJECTS_DIR
+    process.env.OBJECTS_DIR = '/env/objects'
+    try {
+      expect(resolveObjectsDir(root)).toBe('/env/objects')
+    } finally {
+      if (previous === undefined) delete process.env.OBJECTS_DIR
+      else process.env.OBJECTS_DIR = previous
+    }
+  })
 })
 
 describe('objects repository namespaces', () => {

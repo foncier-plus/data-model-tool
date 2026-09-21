@@ -1,10 +1,12 @@
 import { Shuffle, X } from 'lucide-react'
 
 export function LayoutSettings({
-  linkDistance,
-  repulsion,
-  onLinkDistance,
-  onRepulsion,
+  collisionGap,
+  stability,
+  edgeStrength,
+  onCollisionGap,
+  onStability,
+  onEdgeStrength,
   onRelayout,
   onClose,
 }) {
@@ -25,32 +27,48 @@ export function LayoutSettings({
       <div className="flex flex-col gap-2.5">
         <label className="flex flex-col gap-1">
           <span className="flex items-center justify-between text-muted-foreground">
-            <span>Longueur des liens</span>
-            <span className="font-mono text-foreground">{linkDistance} px</span>
+            <span>Espacement</span>
+            <span className="font-mono text-foreground">{collisionGap} px</span>
           </span>
           <input
             type="range"
             min={0}
-            max={200}
+            max={48}
             step={4}
-            value={linkDistance}
-            onChange={(event) => onLinkDistance(Number(event.target.value))}
+            value={collisionGap}
+            onChange={(event) => onCollisionGap(Number(event.target.value))}
             className="h-1 w-full cursor-pointer appearance-none rounded-full bg-black/10 accent-primary"
           />
         </label>
 
         <label className="flex flex-col gap-1">
           <span className="flex items-center justify-between text-muted-foreground">
-            <span>Distance de répulsion</span>
-            <span className="font-mono text-foreground">{repulsion} px</span>
+            <span>Stabilité</span>
+            <span className="font-mono text-foreground">{Math.round(stability * 100)} %</span>
           </span>
           <input
             type="range"
             min={0}
-            max={120}
-            step={4}
-            value={repulsion}
-            onChange={(event) => onRepulsion(Number(event.target.value))}
+            max={100}
+            step={5}
+            value={Math.round(stability * 100)}
+            onChange={(event) => onStability(Number(event.target.value) / 100)}
+            className="h-1 w-full cursor-pointer appearance-none rounded-full bg-black/10 accent-primary"
+          />
+        </label>
+
+        <label className="flex flex-col gap-1">
+          <span className="flex items-center justify-between text-muted-foreground">
+            <span>Attraction des liens</span>
+            <span className="font-mono text-foreground">{edgeStrength.toFixed(2)}</span>
+          </span>
+          <input
+            type="range"
+            min={0}
+            max={30}
+            step={1}
+            value={Math.round(edgeStrength * 100)}
+            onChange={(event) => onEdgeStrength(Number(event.target.value) / 100)}
             className="h-1 w-full cursor-pointer appearance-none rounded-full bg-black/10 accent-primary"
           />
         </label>

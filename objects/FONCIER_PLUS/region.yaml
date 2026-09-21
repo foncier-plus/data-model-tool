@@ -1,7 +1,0 @@
-name: Région
-description: "Région française"
-
-attributes:
-  - name: region_id
-    type: string
-    description: "Identifiant de la Région (clé primaire)."

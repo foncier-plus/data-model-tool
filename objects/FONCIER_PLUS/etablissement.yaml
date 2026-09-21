@@ -1,8 +1,0 @@
-name: Etablissement
-description: "Etablissement implanté sur une ou plusieurs parcelles du territoire"
-attributes:
-  - name: site_id
-    type: string
-    description: ""
-    origin:
-      from: [FONCIER_PLUS.site.site_id]
