@@ -205,9 +205,7 @@ attributes:
       expect(container.querySelectorAll('.react-flow__edge').length).toBe(1)
     })
 
-    const crmToggle = [...container.querySelectorAll('.react-flow__node button')].find((button) =>
-      button.textContent.includes('crm'),
-    )
+    const crmToggle = container.querySelector('button[aria-label="Replier crm"]')
     fireEvent.click(crmToggle)
 
     await waitFor(() => {
@@ -426,50 +424,100 @@ groups:
     })
   })
 
-  it('hides the cardinal of a hidden link', async () => {
+  it('clears an attribute example and removes the property', async () => {
     const data = [
       {
-        name: 'tiers.yaml',
-        content: `name: tiers
+        name: 'client.yaml',
+        content: `name: client
 attributes:
   - name: id
     type: string
+    example: ABC
+`,
+        hash: 'a',
+        mtime: 1,
+      },
+    ]
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({ objects: data }),
+      })),
+    )
+
+    const { container } = renderApp()
+    await waitFor(() => {
+      expect(useProjectStore.getState().entries).toHaveLength(1)
+    })
+    await selectAll()
+    await waitFor(() => {
+      expect(container.querySelectorAll('.react-flow__node').length).toBe(1)
+    })
+    for (const button of container.querySelectorAll('button[aria-label="root attributes"]')) {
+      fireEvent.click(button)
+    }
+
+    const attributeButton = [...container.querySelectorAll('.react-flow__node button')].find(
+      (button) => button.textContent.includes('id'),
+    )
+    fireEvent.click(attributeButton)
+    await waitFor(() => {
+      expect(useProjectStore.getState().selection?.kind).toBe('attribute')
+    })
+
+    const input = await screen.findByPlaceholderText('example value')
+    expect(input.value).toBe('ABC')
+    fireEvent.change(input, { target: { value: '' } })
+    fireEvent.blur(input)
+
+    await waitFor(() => {
+      expect(useProjectStore.getState().entries[0].model.attributes[0].example).toBe('')
+    })
+    expect(input.value).toBe('')
+  })
+
+  it('reveals dependencies in other objects and collapses stale groups', async () => {
+    const data = [
+      {
+        name: 'a.yaml',
+        content: `name: a
+attributes:
+  - name: a1
+    type: string
+    origin:
+      from: [b.b1]
+      formula: b.b1
+  - name: a2
+    type: string
+    origin:
+      from: [c.c1]
+      formula: c.c1
 `,
         hash: 'a',
         mtime: 1,
       },
       {
-        name: 'client.yaml',
-        content: `name: client
-attributes:
-  - name: id_client
-    type: string
-    origin:
-      from: [tiers.id]
-      formula: tiers.id
-  - name: name
-    type: string
-    origin:
-      from: [tiers.id]
-      formula: tiers.id
+        name: 'b.yaml',
+        content: `name: b
+groups:
+  - name: bg
+    attributes:
+      - name: b1
+        type: string
 `,
         hash: 'b',
         mtime: 2,
       },
       {
-        name: 'report.yaml',
-        content: `name: report
-attributes:
-  - name: a
-    type: string
-    origin:
-      from: [client.id_client]
-      formula: client.id_client
-  - name: b
-    type: string
-    origin:
-      from: [client.name]
-      formula: client.name
+        name: 'c.yaml',
+        content: `name: c
+groups:
+  - name: cg
+    attributes:
+      - name: c1
+        type: string
 `,
         hash: 'c',
         mtime: 3,
@@ -490,22 +538,150 @@ attributes:
     })
     await selectAll()
     await waitFor(() => {
-      expect(container.querySelectorAll('.react-flow__edge').length).toBe(2)
+      expect(container.querySelectorAll('.react-flow__node').length).toBe(3)
     })
+    for (const button of container.querySelectorAll('button[aria-label="root attributes"]')) {
+      fireEvent.click(button)
+    }
 
-    const tiersButton = [...container.querySelectorAll('.react-flow__node button')].find(
-      (button) => button.textContent.includes('tiers'),
+    const expanded = (label) =>
+      container.querySelector(`button[aria-label="${label}"]`)?.getAttribute('aria-expanded')
+    await waitFor(() => expect(expanded('bg')).toBe('false'))
+    expect(expanded('cg')).toBe('false')
+
+    const a1Button = [...container.querySelectorAll('.react-flow__node button')].find(
+      (button) => button.textContent.includes('a1') && button.textContent.includes('string'),
     )
-    fireEvent.click(tiersButton)
+    fireEvent.click(a1Button)
+    await waitFor(() => expect(useProjectStore.getState().selection?.ref).toBe('a.a1'))
+    await waitFor(() => expect(expanded('bg')).toBe('true'))
+    expect(expanded('cg')).toBe('false')
 
+    const a2Button = [...container.querySelectorAll('.react-flow__node button')].find(
+      (button) => button.textContent.includes('a2') && button.textContent.includes('string'),
+    )
+    fireEvent.click(a2Button)
+    await waitFor(() => expect(useProjectStore.getState().selection?.ref).toBe('a.a2'))
+    await waitFor(() => expect(expanded('cg')).toBe('true'))
+    await waitFor(() => expect(expanded('bg')).toBe('false'))
+  })
+
+  it('keeps a namespace group selected after a click', async () => {
+    const namespaced = [
+      {
+        name: 'sales/client.yaml',
+        content: `name: client
+attributes:
+  - name: id
+    type: string
+`,
+        hash: 'a',
+        mtime: 1,
+      },
+    ]
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({ objects: namespaced }),
+      })),
+    )
+
+    const { container } = renderApp()
+    await waitFor(() => expect(useProjectStore.getState().entries).toHaveLength(1))
+    await selectAll()
+    await waitFor(() => expect(container.querySelectorAll('.react-flow__node').length).toBe(2))
+
+    const label = container.querySelector('.react-flow__node[data-id="ns:sales"] span.font-mono')
+    fireEvent.click(label)
     await waitFor(() => {
-      const hiddenLabel = [...container.querySelectorAll('.react-flow__edge')].find((edge) =>
-        edge.querySelector('path')?.getAttribute('style')?.includes('opacity: 0'),
-      )
-      expect(hiddenLabel).toBeTruthy()
-      const text = hiddenLabel.querySelector('.react-flow__edge-text')
-      expect(text?.getAttribute('style')).toContain('opacity: 0')
+      expect(container.querySelector('.react-flow__node.selected[data-id="ns:sales"]')).toBeTruthy()
     })
+  })
+
+  it('selects an edge when clicked', async () => {
+    const { container } = renderApp()
+    await waitForGraph(container)
+
+    const path = container.querySelector('.react-flow__edge path')
+    fireEvent.click(path)
+    await waitFor(() => {
+      expect(container.querySelectorAll('.react-flow__edge.selected').length).toBe(1)
+    })
+  })
+
+  it('collapses the groups of unrelated objects when analyzing', async () => {
+    const data = [
+      {
+        name: 'a.yaml',
+        content: `name: a
+attributes:
+  - name: a1
+    type: string
+    origin:
+      from: [b.b1]
+      formula: b.b1
+`,
+        hash: 'a',
+        mtime: 1,
+      },
+      {
+        name: 'b.yaml',
+        content: `name: b
+groups:
+  - name: bg
+    attributes:
+      - name: b1
+        type: string
+`,
+        hash: 'b',
+        mtime: 2,
+      },
+      {
+        name: 'd.yaml',
+        content: `name: d
+groups:
+  - name: dg
+    attributes:
+      - name: d1
+        type: string
+`,
+        hash: 'c',
+        mtime: 3,
+      },
+    ]
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({ objects: data }),
+      })),
+    )
+
+    const { container } = renderApp()
+    await waitFor(() => expect(useProjectStore.getState().entries).toHaveLength(3))
+    await selectAll()
+    await waitFor(() => expect(container.querySelectorAll('.react-flow__node').length).toBe(3))
+    for (const button of container.querySelectorAll('button[aria-label="root attributes"]')) {
+      fireEvent.click(button)
+    }
+
+    const expanded = (label) =>
+      container.querySelector(`button[aria-label="${label}"]`)?.getAttribute('aria-expanded')
+
+    fireEvent.click(container.querySelector('button[aria-label="dg"]'))
+    await waitFor(() => expect(expanded('dg')).toBe('true'))
+
+    const a1Button = [...container.querySelectorAll('.react-flow__node button')].find(
+      (button) => button.textContent.includes('a1') && button.textContent.includes('string'),
+    )
+    fireEvent.click(a1Button)
+    await waitFor(() => expect(useProjectStore.getState().selection?.ref).toBe('a.a1'))
+
+    await waitFor(() => expect(expanded('bg')).toBe('true'))
+    await waitFor(() => expect(expanded('dg')).toBe('false'))
   })
 
   it('shows the origin in the formula tab', async () => {

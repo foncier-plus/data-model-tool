@@ -83,8 +83,13 @@ export function subtreeObjectIds(tree) {
   return ids
 }
 
-export function filterObjectIds(_objectGraph, selectedObjects) {
-  return new Set(selectedObjects ?? [])
+export function filterObjectIds(objectGraph, selectedObjects) {
+  const base = new Set(selectedObjects ?? [])
+  const ids = new Set(base)
+  for (const edge of objectGraph.edges) {
+    if (base.has(edge.target)) ids.add(edge.source)
+  }
+  return ids
 }
 
 export function buildVisibleGraph(objectGraph, collapsed, objectIds) {

@@ -9,7 +9,7 @@ export function NamespaceNode({ data }) {
   return (
     <div
       className={cn(
-        'pointer-events-none h-full w-full rounded-xl border-2 border-dashed',
+        'namespace-node pointer-events-none h-full w-full rounded-xl border-2 border-dashed',
         collapsed
           ? 'border-zinc-400/70 dark:border-zinc-500/70'
           : 'border-zinc-400/50 dark:border-zinc-500/40',
@@ -24,19 +24,22 @@ export function NamespaceNode({ data }) {
         />
       ) : null}
 
-      <button
-        type="button"
-        onClick={(event) => {
-          event.stopPropagation()
-          onToggle?.(label)
-        }}
-        className="pointer-events-auto flex h-8 w-full items-center gap-1.5 rounded-t-xl px-2 text-left text-xs font-semibold text-muted-foreground hover:bg-black/5"
-      >
-        {collapsed ? (
-          <ChevronRight className="size-3.5 shrink-0" />
-        ) : (
-          <ChevronDown className="size-3.5 shrink-0" />
-        )}
+      <div className="pointer-events-auto flex h-8 w-full items-center gap-1.5 rounded-t-xl px-2 text-xs font-semibold text-muted-foreground hover:bg-black/5">
+        <button
+          type="button"
+          aria-label={collapsed ? `Déplier ${label}` : `Replier ${label}`}
+          onClick={(event) => {
+            event.stopPropagation()
+            onToggle?.(label)
+          }}
+          className="flex size-5 shrink-0 items-center justify-center rounded hover:bg-black/10"
+        >
+          {collapsed ? (
+            <ChevronRight className="size-3.5" />
+          ) : (
+            <ChevronDown className="size-3.5" />
+          )}
+        </button>
         {collapsed ? (
           <Folder className="size-3.5 shrink-0" />
         ) : (
@@ -45,7 +48,7 @@ export function NamespaceNode({ data }) {
         <span className="truncate font-mono text-[11px]">{label}</span>
         <span className="flex-1" />
         <span className="text-[10px] font-normal">{count}</span>
-      </button>
+      </div>
 
       {showHandles ? (
         <Handle

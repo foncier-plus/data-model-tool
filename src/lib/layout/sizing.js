@@ -1,4 +1,5 @@
 import {
+  EXAMPLE_HEIGHT,
   GAP,
   GROUP_HEADER_HEIGHT,
   HEADER_HEIGHT,
@@ -11,6 +12,8 @@ export function objectHeight(model) {
   const rootAttributes = model.attributes?.length ?? 0
   const groups = model.groups ?? []
   const items = rootAttributes + groups.length
+  const examples = [...(model.attributes ?? []), ...groups.flatMap((group) => group.attributes ?? [])]
+    .filter((attribute) => attribute.example).length
 
   let height = HEADER_HEIGHT + PADDING
   height += rootAttributes * ROW_HEIGHT
@@ -19,6 +22,7 @@ export function objectHeight(model) {
     height += GROUP_HEADER_HEIGHT + PADDING
     height += (group.attributes?.length ?? 0) * ROW_HEIGHT
   }
+  height += examples * EXAMPLE_HEIGHT
   height += PADDING
   return height
 }

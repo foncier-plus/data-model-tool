@@ -125,6 +125,9 @@ export function AttributeForm({ entry, entries, groupIndex, attributeIndex, attr
           onChange={(event) =>
             setAttributeField(fileName, groupIndex, attributeIndex, 'example', event.target.value)
           }
+          onBlur={(event) =>
+            setAttributeField(fileName, groupIndex, attributeIndex, 'example', event.target.value)
+          }
         />
       </FieldRow>
 

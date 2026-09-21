@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { computeGroupRects, isUnderNamespace, objectHeight, objectSize } from '@/lib/layout'
+import {
+  computeGroupRects,
+  isUnderNamespace,
+  layoutGraph,
+  layoutLevel,
+  objectHeight,
+  objectSize,
+} from '@/lib/layout'
 import { parseObjectFile } from '@/lib/model/parse'
 
 const FILES = {
@@ -85,5 +92,81 @@ describe('computeGroupRects', () => {
     const after = computeGroupRects([object('a.x', 'a', 500, 400)]).get('a')
     expect(after.x - before.x).toBe(500)
     expect(after.y - before.y).toBe(400)
+  })
+})
+
+describe('layoutLevel', () => {
+  it('places dependencies in columns and stacks the rest', () => {
+    const elements = [
+      { id: 'a', width: 100, height: 50 },
+      { id: 'b', width: 100, height: 50 },
+      { id: 'c', width: 100, height: 50 },
+    ]
+    const positions = layoutLevel(elements, [{ source: 'a', target: 'b' }], 20)
+    expect(positions.get('a').x).toBeLessThan(positions.get('b').x)
+    expect(positions.get('c').x).toBe(positions.get('a').x)
+    expect(positions.get('c').y).not.toBe(positions.get('a').y)
+  })
+})
+
+describe('layoutGraph', () => {
+  const size = (width = 300, height = 100) => ({ width, height })
+
+  it('places dependent objects left to right', () => {
+    const units = [
+      { id: 'tiers', namespace: null, kind: 'object' },
+      { id: 'client', namespace: null, kind: 'object' },
+    ]
+    const sizes = new Map([
+      ['tiers', size()],
+      ['client', size(300, 120)],
+    ])
+    const { positions } = layoutGraph({
+      units,
+      edges: [{ source: 'tiers', target: 'client' }],
+      collapsed: new Set(),
+      sizes,
+      columnGap: 80,
+    })
+    expect(positions.get('tiers').x).toBeLessThan(positions.get('client').x)
+  })
+
+  it('stacks independent objects vertically', () => {
+    const units = [
+      { id: 'a', namespace: null, kind: 'object' },
+      { id: 'b', namespace: null, kind: 'object' },
+    ]
+    const sizes = new Map([
+      ['a', size()],
+      ['b', size()],
+    ])
+    const { positions } = layoutGraph({
+      units,
+      edges: [],
+      collapsed: new Set(),
+      sizes,
+      columnGap: 80,
+    })
+    expect(positions.get('a').x).toBe(positions.get('b').x)
+    expect(positions.get('a').y).not.toBe(positions.get('b').y)
+  })
+
+  it('aggregates a group dependencies from its members', () => {
+    const units = [
+      { id: 'a.x', namespace: 'a', kind: 'object' },
+      { id: 'b.y', namespace: 'b', kind: 'object' },
+    ]
+    const sizes = new Map([
+      ['a.x', size()],
+      ['b.y', size()],
+    ])
+    const { groups } = layoutGraph({
+      units,
+      edges: [{ source: 'a.x', target: 'b.y' }],
+      collapsed: new Set(),
+      sizes,
+      columnGap: 80,
+    })
+    expect(groups.get('a').x).toBeLessThan(groups.get('b').x)
   })
 })

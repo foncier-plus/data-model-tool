@@ -95,9 +95,9 @@ describe('filterObjectIds', () => {
     expect(filterObjectIds(GRAPH, new Set())).toEqual(new Set())
   })
 
-  it('keeps only the selection', () => {
+  it('keeps the selection and adds its dependencies', () => {
     const ids = filterObjectIds(GRAPH, new Set(['c']))
-    expect([...ids].sort()).toEqual(['c'])
+    expect([...ids].sort()).toEqual(['a.x', 'a.y', 'c'])
   })
 })
 

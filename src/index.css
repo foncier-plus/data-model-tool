@@ -120,6 +120,12 @@
   .editor-fields [role="combobox"] {
     @apply font-mono text-xs text-foreground;
   }
+
+  .react-flow__node.selected .namespace-node {
+    border-color: var(--ring) !important;
+    background-color: color-mix(in oklch, var(--ring) 10%, transparent) !important;
+    box-shadow: 0 0 0 2px color-mix(in oklch, var(--ring) 35%, transparent);
+  }
 }
 
 @layer base {

@@ -26,21 +26,21 @@ import {
 import { colorFor } from '@/lib/colors'
 import { useProjectStore } from '@/lib/store/useProjectStore'
 import { EntityNode } from './EntityNode'
+import { FlatEdge } from './FlatEdge'
 import { NamespaceNode } from './NamespaceNode'
 import {
   COLLAPSED_GROUP_HEIGHT,
   COLLAPSED_GROUP_WIDTH,
+  COLUMN_GAP,
   NODE_WIDTH,
   computeGroupRects,
   isUnderNamespace,
+  layoutGraph,
   objectSize,
 } from '@/lib/layout'
 
 const nodeTypes = { entity: EntityNode, namespace: NamespaceNode }
-
-const GRID_COLUMNS = 6
-const GRID_X = NODE_WIDTH + 80
-const GRID_Y = 240
+const edgeTypes = { flat: FlatEdge }
 
 const GRAPH_BACKGROUND = {
   gap: 10,
@@ -145,10 +145,9 @@ function GraphCanvas({ entries, selection, onSelect, selectedObjects }) {
   const nodesRef = useRef([])
   const namespaceOfRef = useRef(namespaceOf)
   const positionsRef = useRef(new Map())
-  const lastRectsRef = useRef(new Map())
-  const gridRef = useRef(0)
   const dragStartRef = useRef(null)
   const appliedRef = useRef({ signature: null })
+  const appliedLayoutRef = useRef(null)
   const handlesRef = useRef(null)
   const pendingHandlesRef = useRef(false)
   const fittedTopology = useRef(null)
@@ -170,11 +169,36 @@ function GraphCanvas({ entries, selection, onSelect, selectedObjects }) {
     )
     .join('|')
 
-  const nextDefaultPosition = useCallback(() => {
-    const slot = gridRef.current
-    gridRef.current += 1
-    return { x: (slot % GRID_COLUMNS) * GRID_X, y: Math.floor(slot / GRID_COLUMNS) * GRID_Y }
-  }, [])
+  const nextDefaultPosition = useCallback(() => ({ x: 0, y: 0 }), [])
+
+  const units = useMemo(
+    () => [
+      ...visible.objectNodes.map((node) => ({
+        id: node.id,
+        namespace: node.namespace ?? null,
+        kind: 'object',
+      })),
+      ...[...visible.collapsedGroupIds].map((namespace) => ({
+        id: `ns:${namespace}`,
+        namespace,
+        kind: 'collapsed',
+      })),
+    ],
+    [visible],
+  )
+
+  const sizes = useMemo(() => {
+    const map = new Map()
+    for (const node of nodes) {
+      if (node.type !== 'entity') continue
+      const size = objectSize(node.data.model)
+      map.set(node.id, {
+        width: node.measured?.width ?? size.width,
+        height: node.measured?.height ?? size.height,
+      })
+    }
+    return map
+  }, [nodes])
 
   const groupRects = useMemo(() => {
     const objects = nodes
@@ -259,17 +283,36 @@ function GraphCanvas({ entries, selection, onSelect, selectedObjects }) {
   )
 
   useEffect(() => {
-    const previousRects = lastRectsRef.current
-    for (const object of visible.objectNodes) {
-      if (!positionsRef.current.has(object.id)) {
-        positionsRef.current.set(object.id, nextDefaultPosition())
+    const layoutKey = [
+      units.map((unit) => unit.id).sort().join(','),
+      [...collapsed].sort().join(','),
+      [...sizes]
+        .map(([id, size]) => `${id}:${Math.round(size.width)}x${Math.round(size.height)}`)
+        .sort()
+        .join(','),
+      visible.edges
+        .map((edge) => `${edge.source}->${edge.target}`)
+        .sort()
+        .join(','),
+    ].join('~')
+
+    if (appliedLayoutRef.current !== layoutKey) {
+      appliedLayoutRef.current = layoutKey
+      const layout = layoutGraph({
+        units,
+        edges: visible.edges,
+        collapsed,
+        sizes,
+        columnGap: COLUMN_GAP,
+      })
+      for (const [id, position] of layout.positions) {
+        positionsRef.current.set(id, position)
       }
     }
-    for (const namespace of visible.collapsedGroupIds) {
-      const id = `ns:${namespace}`
-      if (positionsRef.current.has(id)) continue
-      const rect = previousRects.get(namespace)
-      positionsRef.current.set(id, rect ? { x: rect.x, y: rect.y } : nextDefaultPosition())
+    for (const unit of units) {
+      if (!positionsRef.current.has(unit.id)) {
+        positionsRef.current.set(unit.id, nextDefaultPosition())
+      }
     }
 
     const measuredMap = new Map(
@@ -405,7 +448,6 @@ function GraphCanvas({ entries, selection, onSelect, selectedObjects }) {
         fitView({ padding: 0.2, duration: 250 })
       }
     }, 60)
-    lastRectsRef.current = groupRects
     return () => window.clearTimeout(timer)
   }, [
     visible,
@@ -415,6 +457,8 @@ function GraphCanvas({ entries, selection, onSelect, selectedObjects }) {
     namespaceCounts,
     revealRefs,
     groupRects,
+    units,
+    sizes,
     measureKey,
     nextDefaultPosition,
     toggleGroup,
@@ -424,11 +468,15 @@ function GraphCanvas({ entries, selection, onSelect, selectedObjects }) {
   ])
 
   useEffect(() => {
-    setEdges(
-      activeEdges.map((edge) => {
+    setEdges((previous) => {
+      const byId = new Map(previous.map((edge) => [edge.id, edge]))
+      return activeEdges.map((edge) => {
         const color = colorFor(edge.source)
+        const existing = byId.get(edge.id)
         return {
+          ...existing,
           id: edge.id,
+          type: 'flat',
           source: edge.source,
           target: edge.target,
           sourceHandle: edge.sourceHandle,
@@ -436,7 +484,6 @@ function GraphCanvas({ entries, selection, onSelect, selectedObjects }) {
           sourceRef: edge.sourceRef,
           targetRef: edge.targetRef,
           zIndex: edgeMode === 'attribute' ? 2 : 0,
-          label: edge.count > 1 ? String(edge.count) : undefined,
           markerEnd: {
             type: MarkerType.ArrowClosed,
             color,
@@ -444,11 +491,10 @@ function GraphCanvas({ entries, selection, onSelect, selectedObjects }) {
             width: 25,
             height: 25,
           },
-          labelStyle: { fontSize: 10, fill: color },
           style: { stroke: color, strokeWidth: 1.5, cursor: 'pointer' },
         }
-      }),
-    )
+      })
+    })
   }, [activeEdges, edgeMode, setEdges])
 
   const selectionKey = useMemo(
@@ -502,7 +548,6 @@ function GraphCanvas({ entries, selection, onSelect, selectedObjects }) {
           ...edge,
           animated: isUpstream,
           markerEnd: edge.markerEnd,
-          labelStyle: { ...edge.labelStyle, opacity: hidden ? 0 : 1 },
           style: {
             ...edge.style,
             opacity: hidden ? 0 : 1,
@@ -537,6 +582,7 @@ function GraphCanvas({ entries, selection, onSelect, selectedObjects }) {
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         onNodesChange={handleNodesChange}
         onNodeDragStart={handleNodeDragStart}
         onNodeDrag={handleNodeDrag}
@@ -554,15 +600,6 @@ function GraphCanvas({ entries, selection, onSelect, selectedObjects }) {
             ref: node.id,
           })
         }}
-        onEdgeClick={(_, edge) =>
-          onSelect({
-            kind: 'object',
-            objectName: edge.source,
-            groupName: null,
-            attributeName: null,
-            ref: edge.source,
-          })
-        }
         minZoom={0.15}
         maxZoom={2.5}
         proOptions={{ hideAttribution: true }}

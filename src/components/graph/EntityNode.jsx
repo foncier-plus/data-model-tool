@@ -83,7 +83,7 @@ function Row({
       <button
         type="button"
         className={cn(
-          'grid h-6 w-full grid-cols-[16px_minmax(0,1fr)_auto_auto] items-center gap-2 rounded px-1.5 text-left text-[11px] hover:bg-accent',
+          'grid w-full grid-cols-[16px_minmax(0,1fr)_auto_auto] items-center gap-2 rounded px-1.5 py-0.5 text-left text-[11px] hover:bg-accent',
           stateClass,
         )}
         onClick={(event) => {
@@ -104,10 +104,18 @@ function Row({
             <Pencil className={cn('size-2.5', 'text-zinc-400')} />
           )}
         </span>
-        <span className={cn('truncate font-mono', optional ? 'font-normal italic' : 'font-medium')}>
-          {label}
+        <span className="flex min-w-0 flex-col">
+          <span
+            className={cn(
+              'truncate font-mono',
+              optional ? 'font-normal italic' : 'font-bold',
+              warning && 'text-destructive',
+            )}
+          >
+            {label}
+          </span>
           {example ? (
-            <span className="font-normal italic text-muted-foreground"> · {example}</span>
+            <span className="truncate text-[10px] italic text-muted-foreground">{example}</span>
           ) : null}
         </span>
         {warning ? <AlertTriangle className="size-3 text-destructive" /> : <span />}
@@ -136,6 +144,8 @@ export function EntityNode({ data }) {
   const [expanded, setExpanded] = useState(() => new Set())
   const [rootCollapsed, setRootCollapsed] = useState(true)
   const [lastReveal, setLastReveal] = useState('')
+  const [autoGroups, setAutoGroups] = useState(() => new Set())
+  const [autoRoot, setAutoRoot] = useState(false)
   const {
     model,
     qualifiedName,
@@ -159,20 +169,52 @@ export function EntityNode({ data }) {
     (model.groups ?? []).reduce((total, group) => total + (group.attributes?.length ?? 0), 0)
 
   const revealKey = revealRefs?.size ? [...revealRefs].sort().join('|') : ''
-  if (revealKey && revealKey !== lastReveal) {
+  if (revealKey !== lastReveal) {
     setLastReveal(revealKey)
-    const nextExpanded = new Set(expanded)
-    for (const group of model.groups ?? []) {
-      const hasReveal = (group.attributes ?? []).some((attribute) =>
-        revealRefs.has(attributeRef(qualifiedName, group.name, attribute.name)),
-      )
-      if (hasReveal) nextExpanded.add(groupRef(qualifiedName, group.name))
+    if (!highlighted) {
+      if (!revealKey) {
+        setExpanded((previous) => {
+          const next = new Set(previous)
+          for (const ref of autoGroups) next.delete(ref)
+          return next
+        })
+        setAutoGroups(new Set())
+        if (autoRoot) setRootCollapsed(true)
+        setAutoRoot(false)
+      } else {
+        const nextAuto = new Set()
+        for (const group of model.groups ?? []) {
+          const hasReveal = (group.attributes ?? []).some((attribute) =>
+            revealRefs?.has(attributeRef(qualifiedName, group.name, attribute.name)),
+          )
+          if (hasReveal) nextAuto.add(groupRef(qualifiedName, group.name))
+        }
+        const revealRoot = rootAttributes.some((attribute) =>
+          revealRefs?.has(attributeRef(qualifiedName, null, attribute.name)),
+        )
+        const related = nextAuto.size > 0 || revealRoot
+
+        if (related) {
+          setExpanded((previous) => {
+            const next = new Set(previous)
+            for (const ref of autoGroups) {
+              if (!nextAuto.has(ref)) next.delete(ref)
+            }
+            for (const ref of nextAuto) next.add(ref)
+            return next
+          })
+          setAutoGroups(nextAuto)
+          if (revealRoot) setRootCollapsed(false)
+          else if (autoRoot) setRootCollapsed(true)
+          setAutoRoot(revealRoot)
+        } else {
+          setExpanded(new Set())
+          setAutoGroups(new Set())
+          setRootCollapsed(true)
+          setAutoRoot(false)
+        }
+      }
     }
-    setExpanded(nextExpanded)
-    const revealRoot = rootAttributes.some((attribute) =>
-      revealRefs.has(attributeRef(qualifiedName, null, attribute.name)),
-    )
-    if (revealRoot) setRootCollapsed(false)
   }
 
   const toggleGroup = (key) =>

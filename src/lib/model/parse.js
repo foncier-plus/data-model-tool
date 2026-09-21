@@ -6,6 +6,11 @@ function asString(value) {
   return typeof value === 'string' ? value : ''
 }
 
+function asText(value) {
+  if (value === undefined || value === null) return ''
+  return typeof value === 'string' ? value : String(value)
+}
+
 function asArray(node) {
   return Array.isArray(node?.items) ? node.items : []
 }
@@ -28,7 +33,7 @@ function attributeFromNode(node) {
   const attribute = {
     name,
     optional: node.get('optional') === true,
-    example: asString(node.get('example')),
+    example: asText(node.get('example')),
     description: asString(node.get('description')),
     comment: readComment(node),
   }
