@@ -1,0 +1,23 @@
+name: Parcelle
+description: "Parcelle cadastrale déclarée dans le cadastre et appartenant à un site économique"
+
+attributes:
+  - name: parcelle_id
+    type: string
+    description: "Identifiant de la parcelle au sein d'un cadastre millésimé (clé primaire)."
+    origin:
+      from: [SOURCES.cadastre.parcelle_id]
+  - name: cadastre_id
+    type: string
+    description: "Identifiant d'un cadastre millésimé (clé primaire adjointe)."
+  - name: site_id
+    type: string
+    description: "Identifiant du site lié à la parcelle."
+    origin:
+      from: [site.site_id]
+  - name: friche_id
+    type: string
+    description: "Identifiant de la friche lié à la parcelle (si friche il y a)."
+    type: optional
+    origin:
+      from: [friche.friche_id]

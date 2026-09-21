@@ -1,0 +1,102 @@
+name: etablissement
+description: "Établissement de production d'activité économique, situé au sein d'un site économique, de façon à répondre aux exigences de la Loi Climat & Résilience consistant à identifier les occupants."
+
+attributes:
+  - name: SIRET
+    type: string
+    description: "Code SIRET de l'établissement (clé primaire)."
+  - name: SIREN
+    type: string
+    description: "Code SIREN de l'entreprise."
+  - name: terr_id
+    type: string
+    description: "Liste des identifiants de TERRAIN-ECO où se situe l'établissement (séparateur |)."
+    origin:
+      from: [terrain_eco.terr_id]
+      formula: terrain_eco.terr_id + del
+  - name: ban_id
+    type: string
+    description: "Référence à l'adresse principale de l'établissement dans la Base Adresse Nationale."
+  - name: bat_id
+    type: string
+    description: "Liste des identifiants de bâtiments dans le Référentiel National des Bâtiments (séparateur |)."
+  - name: etab_adresse
+    type: string
+    description: "Adresse principale de l'établissement (obligatoire si ban_id est vide)."
+  - name: etab_raison_sociale
+    type: string
+    description: "Raison sociale (nom juridique) de l'entreprise."
+  - name: etab_nat_juridique
+    type: string
+    description: "Code de la catégorie juridique de l'entreprise (3ème niveau INSEE)."
+  - name: etab_nom
+    type: string
+    description: "Nom ou appellation usuelle ou sigle de l'établissement."
+  - name: epci_nom
+    type: string
+    description: "Nom de l'EPCI où se situe l'établissement."
+  - name: epci_siren
+    type: string
+    description: "Code SIREN de l'EPCI où se situe l'établissement."
+  - name: comm_nom
+    type: string
+    description: "Nom de la commune où se situe l'établissement."
+  - name: comm_insee
+    type: string
+    description: "Code INSEE de la commune où se situe l'établissement."
+  - name: etab_siege
+    type: string
+    description: "Qualité de siège de l'établissement (oui/non)."
+  - name: etab_creation_date
+    type: string
+    description: "Date de création de l'établissement."
+  - name: etab_identif_date
+    type: string
+    description: "Date d'identification de l'établissement."
+  - name: etab_actu_date
+    type: string
+    description: "Date de dernière actualisation des informations."
+  - name: etab_actif
+    type: string
+    description: "Établissement en activité (oui/non)."
+  - name: etab_fermeture_date
+    type: string
+    description: "Date ou année de fermeture de l'établissement."
+  - name: etab_description
+    type: string
+    description: "Commentaire libre avec des informations descriptives de l'établissement."
+  - name: etab_activite_code
+    type: string
+    description: "Code NAF de l'activité principale de l'établissement."
+  - name: etab_activite_libelle
+    type: string
+    description: "Libellé NAF de l'activité principale de l'établissement."
+  - name: etab_effectif_code
+    type: string
+    description: "Code de la tranche d'effectif salarié (SIRENE)."
+  - name: etab_effectif_libelle
+    type: string
+    description: "Libellé de la tranche d'effectif salarié."
+  - name: etab_effectif_annee
+    type: string
+    description: "Millésime de la tranche d'effectif salarié."
+  - name: etab_source_info
+    type: string
+    description: "Indication de la (des) source(s) d'information."
+  - name: geocodage_qualite
+    type: string
+    description: "Qualité de positionnement de l'établissement."
+  - name: etab_geompoint
+    type: string
+    description: "Multi localisations ponctuelles de l'établissement au format GeoJSON."
+
+groups:
+  - name: contact
+    description: "Coordonnées de contact de l'établissement."
+    attributes:
+      - name: etab_contact_mail
+        type: string
+        description: "Mail de contact de l'établissement."
+      - name: etab_contact_tel
+        type: string
+        description: "Numéro de téléphone de contact de l'établissement."

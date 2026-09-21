@@ -1,0 +1,14 @@
+name: Friche
+description: "Friche déclarée dans Friche+ et appartenant ou non à un site économique"
+
+attributes:
+  - name: friche_id
+    type: string
+    description: "Identifiant de la friche au sein de Friche+ (clé primaire)."
+    origin:
+      from: [FRICHE_PLUS.friche.friche_id]
+  - name: site_id
+    type: string
+    description: "Identifiant du site lié à la friche."
+    origin:
+      from: [site.site_id]

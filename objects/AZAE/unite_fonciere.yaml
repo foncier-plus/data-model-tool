@@ -1,0 +1,73 @@
+name: unite_fonciere
+description: "Table des Unités Foncières (TUP) recoupant le périmètre des sites économiques."
+
+attributes:
+  - name: idtup
+    type: string
+    description: "Identifiant unique de la TUP (Table des Unités Foncières)."
+  - name: idprocpte
+    type: string
+    description: "Identifiant du compte de propriété Foncier."
+  - name: jannatmin
+    type: number
+    description: "Année minimale de naissance / constitution des propriétaires (-1 si inconnu)."
+  - name: jannatmax
+    type: number
+    description: "Année maximale de naissance / constitution des propriétaires (-1 si inconnu)."
+  - name: nlocal
+    type: number
+    description: "Nombre de locaux enregistrés sur la TUP."
+  - name: catpro2
+    type: string
+    description: "Code de niveau 2 de la catégorie de propriétaire."
+  - name: catpro2txt
+    type: string
+    description: "Libellé texte de la catégorie de propriétaire (niveau 2)."
+  - name: catpro3
+    type: string
+    description: "Code de niveau 3 de la catégorie de propriétaire."
+  - name: surf_tot
+    type: number
+    description: "Surface totale de l'unité foncière (m²)."
+  - name: cleabs_bdt
+    type: string
+    description: "Clé d'identifiant unique de la Base de Données Territoriale."
+    origin:
+      from: [AZAE.site_eco.cleabs_bdt]
+      formula: =
+  - name: site_id
+    type: string
+    description: "Identifiant du site économique rattaché."
+    origin:
+      from: [site_eco.site_id]
+      formula: site_eco.site_id
+  - name: site_nom
+    type: string
+    description: "Nom du site économique rattaché."
+  - name: surf_intersect
+    type: number
+    description: "Surface d'intersection géographique avec le site (m²)."
+  - name: ratio
+    type: number
+    description: "Ratio de recouvrement de la TUP dans le site éco (0 à 1)."
+  - name: catpro_aggr
+    type: string
+    description: "Type d'occupant/propriétaire agrégé."
+  - name: catpro_public_prive
+    type: string
+    description: "Nature juridique du propriétaire (Public ou Privé)."
+  - name: surf_bati
+    type: number
+    description: "Surface totale de l'emprise au sol du bâti sur la TUP (m²)."
+  - name: densite_bati
+    type: number
+    description: "Ratio de surface bâtie par rapport à la surface totale (surf_bati / surf_tot)."
+  - name: densite_classe
+    type: string
+    description: "Qualification qualitative du taux d'emprise du bâti."
+  - name: densite_couleur
+    type: string
+    description: "Code couleur d'affichage cartographique du niveau de densité."
+  - name: geometry
+    type: string
+    description: "Géométrie surfacique représentative de l'unité foncière."

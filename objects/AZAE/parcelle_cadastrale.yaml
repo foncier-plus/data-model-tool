@@ -1,0 +1,37 @@
+name: parcelle_cadastrale
+description: "Parcelles cadastrales intersectant le contour des sites économiques."
+
+attributes:
+  - name: id
+    type: string
+    description: "Identifiant unique national de la parcelle cadastrale."
+  - name: commune
+    type: string
+    description: "Code Insee de la commune où se situe la parcelle."
+  - name: prefixe
+    type: string
+    description: "Code préfixe de section cadastrale."
+  - name: section
+    type: string
+    description: "Lettre ou numéro d'identification de la section cadastrale."
+  - name: numero
+    type: string
+    description: "Numéro plan de la parcelle au sein de la section."
+  - name: site_id
+    type: string
+    description: "Identifiant du site économique rattaché."
+    origin:
+      from: [site_eco.site_id]
+      formula: site_eco.site_id
+  - name: cleabs_bdt
+    type: string
+    description: "Clé d'identifiant unique de la Base de Données Territoriale."
+  - name: site_nom
+    type: string
+    description: "Nom du site économique rattaché."
+  - name: ratio_pci
+    type: number
+    description: "Proportions d'inclusion géographique dans le contour du site."
+  - name: geometry
+    type: string
+    description: "Contour polygonal de la parcelle cadastrale."

@@ -23,6 +23,8 @@
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
+  --graph-background: #fdfdfd;
+  --graph-dot: #ccc;
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
@@ -57,6 +59,8 @@
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.556 0 0);
+  --graph-background: #1a1a1a;
+  --graph-dot: #3a3a3a;
   --chart-1: oklch(0.488 0.243 264.376);
   --chart-2: oklch(0.696 0.17 162.48);
   --chart-3: oklch(0.769 0.188 70.08);
@@ -110,9 +114,21 @@
   --color-sidebar-ring: var(--sidebar-ring);
 }
 
+@layer components {
+  .editor-fields input,
+  .editor-fields textarea,
+  .editor-fields [role="combobox"] {
+    @apply font-mono text-xs text-foreground;
+  }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
+  }
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]) {
+    cursor: pointer;
   }
   body {
     @apply bg-background text-foreground;

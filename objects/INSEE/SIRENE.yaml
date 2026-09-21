@@ -1,0 +1,4 @@
+name: INSEE.SIRENE
+description:
+attributes: [{name: siret, type: string, description: ""}, {name: trancheEffectifsEtablissement, type: string, description: ""}]
+groups: []

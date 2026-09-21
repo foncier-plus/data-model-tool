@@ -1,0 +1,30 @@
+name: pole_eco
+description: "Un pôle économique est un élément de représentation cartographique de l'activité et de l'attractivité économique globale d'un territoire à l'échelle régionale. Il est constitué d'un seul ou de plusieurs sites économiques géographiquement proches."
+
+attributes:
+  - name: pole_id
+    type: string
+    description: "Identifiant du pôle économique (clé primaire)."
+  - name: pole_nom
+    type: string
+    description: "Nom du pôle économique."
+  - name: pole_vocadomi
+    type: string
+    description: "Vocation dominante du pôle économique."
+  - name: pole_identif_date
+    type: string
+    description: "Date d'identification du pôle économique (format YYYY-MM-DD)."
+  - name: pole_actu_date
+    type: string
+    description: "Date de dernière actualisation des informations sur le pôle économique."
+  - name: pole_nb_site
+    type: integer
+    description: "Nombre de sites composant le pôle économique."
+  - name: pole_nb_etab
+    type: integer
+    description: "Nombre total d'établissements du pôle économique."
+  - name: pole_nb_emploi
+    type: integer
+    description: "Nombre total d'emplois du pôle économique."
+
+groups: [{name: geometrie, description: "", attributes: [{name: pole_surface, type: integer, description: "Somme des surfaces des sites économiques constituant le pôle."}, {name: pole_rayonnement, type: string, description: "Rayonnement du pôle économique."}, {name: pole_geompoint, type: string, description: "Coordonnées géographiques du centroïde du pôle éco au format GeoJSON."}]}]

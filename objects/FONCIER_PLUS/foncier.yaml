@@ -1,0 +1,9 @@
+name: Foncier
+description: "Foncier économique observé et pour lequel de nombreuses propriétés sont calculées"
+
+attributes:
+  - name: parcelle_id
+    type: string
+    description: "Identifiant de la parcelle (clé primaire)."
+    origin:
+      from: [parcelle.parcelle_id]

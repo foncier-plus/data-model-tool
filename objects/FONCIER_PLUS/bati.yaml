@@ -1,0 +1,8 @@
+name: Bati
+description: "Bati sur une parcelle"
+attributes:
+  - name: parcelle_id
+    type: string
+    description: ""
+    origin:
+      from: [FONCIER_PLUS.parcelle.parcelle_id]

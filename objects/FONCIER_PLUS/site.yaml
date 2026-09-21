@@ -1,0 +1,12 @@
+name: Site
+description: "Site observé sur le territoire (site économique, zone d'activité, site isolé, site en friche)"
+
+attributes:
+  - name: site_id
+    type: string
+    description: "Identifiant du site (clé primaire)."
+  - name: epci_id
+    type: string
+    description: "Identifiant de l'EPCI de rattachement."
+    origin:
+      from: [epci.epci_id]

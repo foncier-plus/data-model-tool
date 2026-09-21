@@ -1,0 +1,12 @@
+name: EPCI
+description: "Collectivité en charge des sites, fonciers, offres, friches économiques de son territoire"
+
+attributes:
+  - name: epci_id
+    type: string
+    description: "Identifiant de l'EPCI (clé primaire)."
+  - name: region_id
+    type: string
+    description: "Identifiant de la région à laquelle est rattachée l'EPCI."
+    origin:
+      from: [region.region_id]

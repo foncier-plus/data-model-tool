@@ -1,0 +1,69 @@
+name: etablissement
+namespace: AZAE
+description: "Établissements économiques et entités juridiques hébergés au sein des sites économiques."
+
+attributes:
+  - name: siret
+    type: string
+    description: "Identifiant SIRET de l'établissement (14 chiffres)."
+    origin:
+      from: [INSEE.SIRENE.siret]
+  - name: siren
+    type: string
+    description: "Identifiant SIREN de l'unité légale (9 chiffres)."
+  - name: nom_etablissement
+    type: string
+    description: "Nom de l'établissement ou raison sociale."
+  - name: dateCreationEtablissement
+    type: string
+    description: "Date de création de l'établissement."
+  - name: dateCreationUniteLegale
+    type: string
+    description: "Date de création de la société."
+  - name: activitePrincipaleEtablissement
+    type: string
+    description: "Code NAF/APE de l'activité principale."
+  - name: lib_naf_court
+    type: string
+    description: "Libellé de la sous-classe NAF/APE."
+  - name: adresse
+    type: string
+    description: "Adresse postale complète de l'établissement."
+  - name: industrie
+    type: boolean
+    description: "Indicateur booléen d'activité industrielle."
+  - name: sci
+    type: boolean
+    description: "Indicateur booléen de société civile immobilière."
+  - name: trancheEffectifsEtablissement
+    type: string
+    description: "Code Insee de la tranche d'effectif salarié."
+    origin:
+      from: [INSEE.SIRENE.trancheEffectifsEtablissement]
+      formula: la valeur pour l'établissement dans la base SIRENE
+  - name: mediane_effectif
+    type: number
+    description: "Estimation médiane du nombre de salariés de la tranche."
+    origin:
+      from: [AZAE.etablissement.trancheEffectifsEtablissement]
+      formula: médiane entre les valeurs séparées par les tirets dans le champ
+  - name: code_sphere
+    type: string
+    description: "Code de la sphère d'activité (présentielle / productive)."
+  - name: site_id
+    type: string
+    description: "Identifiant unique du site économique de rattachement."
+    origin:
+      from: [site_eco.site_id]
+  - name: cleabs_bdt
+    type: string
+    description: "Clé d'identifiant unique de la Base de Données Territoriale."
+  - name: site_nom
+    type: string
+    description: "Nom usuel du site économique rattaché."
+  - name: dup_index
+    type: integer
+    description: "Indice de gestion des doublons sur la géométrie/adresse."
+  - name: geometry
+    type: string
+    description: "Géométrie ponctuelle représentant l'établissement."

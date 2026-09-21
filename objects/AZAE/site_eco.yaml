@@ -1,0 +1,366 @@
+name: site_eco
+description: "Périmètre géographique et fiche synthétique de caractérisation d'un site économique."
+
+attributes:
+  - name: site_id
+    type: string
+    description: "Identifiant unique du site économique (clé primaire)."
+  - name: cleabs_bdt
+    type: string
+    description: "Clé d'identifiant unique BDT du site."
+  - name: site_nom
+    type: string
+    description: "Dénomination usuelle du site économique."
+  - name: site_codreg
+    type: string
+    description: "Code INSEE de la région d'implantation."
+  - name: site_coddep
+    type: string
+    description: "Code INSEE du département d'implantation."
+  - name: site_comm_nom
+    type: string
+    description: "Nom de la commune principale d'implantation."
+  - name: site_comm_insee
+    type: string
+    description: "Code INSEE de la commune d'implantation."
+  - name: site_epci_nom
+    type: string
+    description: "Nom de l'intercommunalité (EPCI) de rattachement."
+  - name: site_epci_siren
+    type: string
+    description: "Code SIREN de l'EPCI gérant le territoire."
+  - name: pole_id
+    type: string
+    description: "Identifiant du pôle économique englobant."
+  - name: site_type
+    type: string
+    description: "Typologie fonctionnelle du site (ZA, ZI, ZAC...)."
+  - name: site_vocadomi
+    type: string
+    description: "Vocation dominante du site économique."
+  - name: site_etat
+    type: string
+    description: "Statut d'aménagement du site (Projet, En cours, Achevé)."
+  - name: site_surf_brute
+    type: number
+    description: "Surface brute globale calculée du périmètre (m²)."
+  - name: site_surf_utile
+    type: number
+    description: "Surface réellement cessible / valorisable (m²)."
+  - name: site_surf_terrain
+    type: number
+    description: "Surface totale brute des terrains du site (m²)."
+  - name: site_surf_occupe
+    type: number
+    description: "Surface foncière globale effectivement occupée (m²)."
+  - name: site_surf_inoccupe
+    type: number
+    description: "Surface foncière disponible/vacante (m²)."
+  - name: site_surf_parking
+    type: number
+    description: "Surface spécifique dédiée à l'aire de stationnement."
+  - name: site_surf_infrastructure
+    type: number
+    description: "Surface des réseaux et voiries publiques du site."
+  - name: site_creation_date
+    type: string
+    description: "Date d'initialisation/création de la zone d'activité."
+  - name: site_identif_date
+    type: string
+    description: "Date de recensement du site dans le système."
+  - name: site_actu_date
+    type: string
+    description: "Date de la dernière mise à jour de la fiche site."
+  - name: site_description
+    type: string
+    description: "Descriptif synthétique des spécificités du site."
+  - name: source_producteur
+    type: string
+    description: "Organisme/SCoT ayant saisi les informations du site."
+  - name: site_quali_territoire
+    type: string
+    description: "Qualification du positionnement territorial."
+  - name: site_evol_urba
+    type: string
+    description: "Perspectives d'évolution d'urbanisme de la zone."
+  - name: site_url
+    type: string
+    description: "Lien web vers une notice ou la fiche descriptive."
+  - name: site_moa_type
+    type: string
+    description: "Type de maîtrise d'ouvrage (Publique, Privée, Mixte)."
+  - name: site_moa_nom
+    type: string
+    description: "Raison sociale de l'aménageur/gestionnaire du site."
+  - name: site_moa_amngt
+    type: string
+    description: "Responsable des travaux d'aménagement de la zone."
+  - name: site_moa_comm
+    type: string
+    description: "Entité en charge de la commercialisation du site."
+  - name: site_uf_nbre
+    type: number
+    description: "Nombre total d'Unités Foncières incluses dans le site."
+  - name: site_uf_vacant_nbre
+    type: number
+    description: "Nombre d'Unités Foncières non bâties / disponibles."
+  - name: site_taux_vacance
+    type: number
+    description: "Pourcentage de vacance foncière sur le site (%)."
+  - name: site_uf_bati_nbre
+    type: number
+    description: "Nombre d'Unités Foncières comprenant au moins un bâti."
+  - name: site_nb_etab
+    type: number
+    description: "Décompte total des établissements sur le site."
+  - name: site_nb_emploi
+    type: number
+    description: "Nombre global d'emplois estimés sur le site."
+  - name: geometry
+    type: string
+    description: "Géométrie polygonale vectorielle des contours du site."
+  - name: site_geompoint
+    type: string
+    description: "Coordonnées du centroïde du site."
+  - name: site_media
+    type: string
+    description: "Fichiers médias attachés (plaquettes, photographies)."
+  - name: site_surf_comm_dispo
+    type: number
+    description: "Surface d'activités commerciales restant disponible (m²)."
+  - name: site_surf_projet
+    type: number
+    description: "Surface foncière faisant l'objet d'un projet d'extension."
+
+groups:
+  - name: usages_surfaces
+    description: "Répartition des surfaces selon l'usage des sols."
+    attributes:
+      - name: site_surf_usage_productif
+        type: number
+        description: "Surface consacrée à l'usage d'activités productives."
+      - name: site_surf_usage_parking
+        type: number
+        description: "Surface de voirie/stationnement au sein du site."
+      - name: site_surf_usage_inconnu
+        type: number
+        description: "Surface de destination non déterminée."
+      - name: site_surf_usage_residentiel
+        type: number
+        description: "Surface affectée au logement/résidentiel."
+
+  - name: urbanisme_plu
+    description: "Informations relatives à la couverture par un document d'urbanisme."
+    attributes:
+      - name: urba_typezone
+        type: string
+        description: "Type d'affectation de zone au PLU (U, AU, N...)."
+      - name: urba_surf_urba
+        type: number
+        description: "Surface du site couverte par un document d'urbanisme."
+      - name: urba_surf_tot_plu
+        type: number
+        description: "Surface totale de la zone PLU englobante."
+      - name: urba_ratio_typezone_plu
+        type: number
+        description: "Pourcentage de la zone PLU occupé par le site éco."
+      - name: urba_ratio_typezone_site
+        type: number
+        description: "Pourcentage de la surface du site couverte par la zone PLU."
+      - name: urba_surf_non_couverte
+        type: number
+        description: "Surface du site sans réglementation PLU opposable."
+      - name: urba_ratio_non_couverte
+        type: number
+        description: "Pourcentage du site hors zone couverte par le PLU."
+      - name: urba_ratio_max
+        type: number
+        description: "Taux maximum de couverture d'une zone d'urbanisme."
+      - name: urba_zone_max
+        type: string
+        description: "Libellé de la zone d'urbanisme prédominante."
+
+  - name: foncier_propriete
+    description: "Statistiques relatives aux Unités Foncières et propriétaires."
+    attributes:
+      - name: uf_nb_uf_public
+        type: integer
+        description: "Nombre d'Unités Foncières appartenant à la sphère publique."
+      - name: uf_nb_uf_prive
+        type: integer
+        description: "Nombre d'Unités Foncières appartenant à des acteurs privés."
+      - name: uf_nb_prop
+        type: integer
+        description: "Nombre total distinct de propriétaires recensés."
+      - name: uf_nb_prop_public
+        type: integer
+        description: "Nombre de propriétaires personnes morales publiques."
+
+  - name: batiments_caracteristiques
+    description: "Statistiques relatives au bâti implanté sur le site."
+    attributes:
+      - name: site_nb_batiment_productif
+        type: integer
+        description: "Nombre total de bâtiments à vocation productive."
+      - name: site_surf_batiment_productif
+        type: number
+        description: "Surface d'emprise des bâtiments productifs (m²)."
+      - name: site_nb_batiment_residentiel
+        type: integer
+        description: "Nombre de bâtiments résidentiels présents."
+      - name: site_surf_batiment_residentiel
+        type: number
+        description: "Surface d'emprise des bâtiments résidentiels (m²)."
+      - name: bati_nb_bati
+        type: integer
+        description: "Nombre total de constructions physiques identifiées."
+      - name: bati_surf_bati_tot
+        type: number
+        description: "Cumul de l'emprise au sol de tous les bâtiments (m²)."
+      - name: bati_anciennete_moy_bati
+        type: number
+        description: "Âge moyen du parc immobilier de la zone (années)."
+      - name: bati_anciennete_med_bati
+        type: number
+        description: "Âge médian des constructions sur le site (années)."
+      - name: bati_surf_bati_nonr
+        type: number
+        description: "Surface au sol du bâti non résidentiel (m²)."
+      - name: bati_nb_bati_recent
+        type: integer
+        description: "Nombre de bâtiments récents."
+      - name: bati_surf_bati_medplus
+        type: number
+        description: "Emprise au sol cumulée des grands bâtiments."
+      - name: bati_part_medplus
+        type: number
+        description: "Part (%) de la surface bâtie occupée par de grands bâtiments."
+      - name: bati_part_nonr
+        type: number
+        description: "Part (%) du bâti destiné au non-résidentiel."
+      - name: bati_part_recent
+        type: number
+        description: "Part (%) du bâti considéré comme récent."
+
+  - name: etablissements_economie
+    description: "Données agrégées sur les entreprises et emplois hébergés."
+    attributes:
+      - name: etablissement_nb_etablissement
+        type: integer
+        description: "Nombre d'établissements économiques actifs hébergés."
+      - name: etablissement_effectif_min_site
+        type: number
+        description: "Effectif salarié minimal recensé dans une entreprise du site."
+      - name: etablissement_effectif_max_site
+        type: number
+        description: "Effectif salarié maximal recensé dans un établissement du site."
+      - name: etablissement_anciennete_moy
+        type: number
+        description: "Ancienneté moyenne des établissements (années)."
+      - name: etablissement_anciennete_med
+        type: number
+        description: "Ancienneté médiane des entreprises présentes (années)."
+      - name: etablissement_nb_etab_industrie
+        type: integer
+        description: "Nombre d'établissements du secteur industriel."
+      - name: etablissement_effectif_industrie
+        type: integer
+        description: "Effectifs salariés cumulés du secteur industriel."
+      - name: etablissement_anciennete_med_industrie
+        type: number
+        description: "Ancienneté médiane des industries du site (années)."
+      - name: etablissement_part_etab_industrie
+        type: number
+        description: "Part (%) des établissements appartenant au secteur industriel."
+      - name: etablissement_part_emploi_industrie
+        type: number
+        description: "Part (%) des emplois concentrés dans l'industrie."
+
+  - name: vocations
+    description: "Secteurs d'activités privilégiés sur le site."
+    attributes:
+      - name: site_voca_industrielle
+        type: string
+        description: "Indicateur/Part dédiée à la vocation industrielle."
+      - name: site_voca_commerciale
+        type: string
+        description: "Indicateur/Part dédiée à la vocation commerciale."
+      - name: site_voca_tertiaire
+        type: string
+        description: "Indicateur/Part dédiée à la vocation tertiaire."
+      - name: site_voca_artisanale
+        type: string
+        description: "Indicateur/Part dédiée à la vocation artisanale."
+      - name: site_voca_touristique
+        type: string
+        description: "Indicateur/Part dédiée aux activités touristiques."
+      - name: site_voca_portuaire
+        type: string
+        description: "Indicateur de raccordement/vocation portuaire."
+      - name: site_voca_aeroportuaire
+        type: string
+        description: "Indicateur de vocation/proximité aéroportuaire."
+
+  - name: reseaux_et_dessertes
+    description: "Équipements, réseaux de fluides et connexions de transports."
+    attributes:
+      - name: reseau_eau_pluviale
+        type: string
+        description: "Présence / état du réseau d'eaux pluviales."
+      - name: reseau_eau_potable
+        type: string
+        description: "Présence / état du réseau d'alimentation en eau potable."
+      - name: reseau_assainissement
+        type: string
+        description: "Présence / type de réseau d'assainissement collectif."
+      - name: reseau_gaz
+        type: string
+        description: "Présence du réseau de distribution de gaz naturel."
+      - name: reseau_electrique
+        type: string
+        description: "Capacité / desserte en réseau électrique (HT/BT)."
+      - name: reseau_fibre_optique
+        type: string
+        description: "Éligibilité au réseau très haut débit / Fibre."
+      - name: reseau_fret_ferroviaire
+        type: string
+        description: "Raccordement direct ou proximité au fret ferroviaire."
+      - name: reseau_fluvial
+        type: string
+        description: "Présence d'accès à une voie navigable / fluviale."
+      - name: desserte_tc
+        type: string
+        description: "Qualité de desserte par les transports en commun."
+      - name: desserte_route_nom
+        type: string
+        description: "Axe routier principal desservant le site économique."
+      - name: autoroute_nom
+        type: string
+        description: "Nom de l'autoroute la plus proche."
+      - name: autoroute_echang_dist
+        type: number
+        description: "Distance à l'échangeur autoroutier le plus proche (km)."
+      - name: gare_nom
+        type: string
+        description: "Nom de la gare voyageurs à proximité."
+      - name: gare_dist
+        type: number
+        description: "Distance jusqu'à la gare voyageurs la plus proche (km)."
+      - name: gare_fret_nom
+        type: string
+        description: "Nom du terminal/gare fret de secteur."
+      - name: gare_fret_dist
+        type: number
+        description: "Distance de la gare fret la plus proche (km)."
+      - name: aeroport_nom
+        type: string
+        description: "Nom de l'aéroport le plus proche."
+      - name: aeroport_dist
+        type: number
+        description: "Distance jusqu'à l'aéroport (km)."
+      - name: port_nom
+        type: string
+        description: "Nom de la plateforme portuaire de proximité."
+      - name: port_dist
+        type: number
+        description: "Distance jusqu'à la zone portuaire (km)."

@@ -1,0 +1,81 @@
+name: site_economique
+description: "Site économique proposant du foncier ou du bâti disponible."
+
+attributes:
+  - name: Id_site_eco
+    type: string
+    description: "Identifiant du site économique."
+    example: "ECO_1"
+  - name: EPCI
+    type: string
+    description: "Nom de l'établissement public de coopération intercommunale."
+    example: "CA Pays Foix-Varilhes"
+  - name: nom_site_economique
+    type: string
+    description: "Nom du site économique."
+    example: "Parc technologique Delta Sud"
+  - name: type_site
+    type: string
+    description: "Type de site (nu, bâti, etc.)."
+    example: "Nu"
+  - name: surface_disponible
+    type: number
+    description: "Surface totale disponible en hectares."
+    example: 3.396
+  - name: surface_batie_disponible
+    type: number
+    description: "Surface bâtie disponible."
+    example: 0
+  - name: surface_mobilisable
+    type: number
+    description: "Surface mobilisable en hectares."
+    example: 3.396
+  - name: date_dispo
+    type: string
+    description: "Date de disponibilité (format M/D/YYYY)."
+    example: "2/17/2025"
+  - name: type_acquisition
+    type: string
+    description: "Modalité d'acquisition (vente, location, etc.)."
+    example: "Vente"
+  - name: vocation_sectorielle
+    type: string
+    description: "Secteurs d'activité ciblés."
+    example: "Industrie,Logistique,Artisanat"
+  - name: parcelle_reference
+    type: string
+    description: "Identifiant cadastral de la parcelle de référence."
+    example: "09332000ZL0326"
+  - name: nombre_parcelles_dispo
+    type: integer
+    description: "Nombre de parcelles disponibles sur le site."
+    example: 12
+  - name: url_photo
+    type: string
+    description: "Référence ou URL de la photo d'illustration."
+    example: "ECO_1"
+  - name: SCM
+    type: integer
+    description: "Site clé en main."
+    example: 0
+  - name: type_maitrise_ouvrage
+    type: string
+    description: "Type de maîtrise d'ouvrage (publique, privée)."
+    example: "Publique"
+
+groups:
+  - name: contact_ard
+    description: "Informations sur l'agence ou la structure de développement économique référente."
+    attributes:
+      - name: nom_ARD
+        type: string
+        description: "Nom de l'agence de développement ou de la collectivité référente."
+        example: "CA Pays Foix-Varilhes"
+      - name: mail_ARD
+        type: string
+        description: "Adresse email de contact."
+        example: "e.torrente@agglo-pfv.fr"
+      - name: url_ARD
+        type: string
+        description: "Lien web vers la fiche ou la structure."
+        example: ""

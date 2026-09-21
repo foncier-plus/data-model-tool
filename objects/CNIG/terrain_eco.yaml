@@ -1,0 +1,69 @@
+name: terrain_eco
+description: "Unité de référence pour l'observation du foncier économique. Ensemble de portions de terrain incluses dans un site économique et regroupées suivant leur état d'occupation, leur stade de commercialisation, leur stade d'aménagement et la nature de leur maîtrise foncière."
+
+attributes:
+  - name: terr_id
+    type: string
+    description: "Identifiant du terrain à vocation économique (clé primaire)."
+  - name: site_id
+    type: string
+    description: "Identifiant du site où se situe le terrain économique."
+    origin:
+      from: [site_eco.site_id]
+      formula: site_eco.site_id
+  - name: terr_refcad
+    type: string
+    description: "Liste des identifiants de parcelles cadastrales intersectées par le terrain économique (séparateur |)."
+  - name: terr_surf_brute
+    type: number
+    description: "Superficie brute du terrain économique en hectare."
+  - name: terr_utile
+    type: string
+    description: "Superficie à prendre en compte (oui / non) dans le calcul de la surface utile du site."
+  - name: terr_identif_date
+    type: string
+    description: "Date d'identification du terrain économique."
+  - name: terr_actu_date
+    type: string
+    description: "Date de dernière actualisation des informations du terrain économique."
+  - name: terr_maitrise_fonc
+    type: string
+    description: "Maîtrise foncière majoritaire du terrain économique."
+  - name: terr_stade_amngt
+    type: string
+    description: "Stade d'aménagement du terrain économique."
+  - name: terr_stade_comm
+    type: string
+    description: "Stade de commercialisation du terrain économique."
+  - name: terr_etat_occup
+    type: string
+    description: "État d'occupation du terrain économique."
+  - name: terr_usage
+    type: string
+    description: "Usage du terrain économique."
+  - name: terr_url_cartofriches
+    type: string
+    description: "URL de la friche dans Cartofriches (lorsque terr_etat_occup = friche)."
+  - name: terr_geomsurf
+    type: string
+    description: "Géométrie surfacique du terrain économique au format GeoJSON."
+  - name: terr_cle_en_main
+    type: string
+    description: "Terrain purgé (oui / non) de tout recours et directement prêt à l'implantation d'activité."
+
+groups:
+  - name: transaction_rgpd
+    description: "Données de transaction foncière soumises à la confidentialité RGPD."
+    attributes:
+      - name: terr_acquereur
+        type: string
+        description: "Nom de l'acquéreur du terrain à vocation économique."
+      - name: terr_cession_date
+        type: string
+        description: "Date de la cession."
+      - name: terr_vente_montant
+        type: integer
+        description: "Montant total de la vente."
+      - name: terr_m2_prix
+        type: integer
+        description: "Prix de la vente ramené au m²."
