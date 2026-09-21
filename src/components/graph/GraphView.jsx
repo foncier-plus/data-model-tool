@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Background,
-  ControlButton,
   Controls,
   MarkerType,
   ReactFlow,
@@ -11,7 +10,6 @@ import {
   useReactFlow,
   useUpdateNodeInternals,
 } from '@xyflow/react'
-import { Settings } from 'lucide-react'
 import '@xyflow/react/dist/style.css'
 import { buildIndex } from '@/lib/model/refs'
 import {
@@ -24,61 +22,25 @@ import {
   buildVisibleGraph,
   filterObjectIds,
   namespacePrefixes,
-  nearestExpandedNamespace,
 } from '@/lib/model/hierarchy'
 import { colorFor } from '@/lib/colors'
 import { useProjectStore } from '@/lib/store/useProjectStore'
 import { EntityNode } from './EntityNode'
-import { LayoutSettings } from './LayoutSettings'
 import { NamespaceNode } from './NamespaceNode'
 import {
   COLLAPSED_GROUP_HEIGHT,
   COLLAPSED_GROUP_WIDTH,
   NODE_WIDTH,
-  finishLayout,
-  hierarchyLayout,
+  computeGroupRects,
+  isUnderNamespace,
   objectSize,
 } from '@/lib/layout'
 
 const nodeTypes = { entity: EntityNode, namespace: NamespaceNode }
 
-const COLLISION_GAP_DEFAULT = 16
-const STABILITY_DEFAULT = 0.25
-const EDGE_STRENGTH_DEFAULT = 0.06
-
-function buildInitialPositions(nodes, groupGlobals, fallback) {
-  const positions = new Map()
-  for (const node of nodes) {
-    if (node.type === 'namespace' && !node.data?.collapsed) continue
-    const parent = node.parentId ? groupGlobals.get(node.parentId.slice(3)) : null
-    const base = parent ?? { x: 0, y: 0 }
-    positions.set(node.id, { x: base.x + node.position.x, y: base.y + node.position.y })
-  }
-  return positions.size > 0 ? positions : fallback
-}
-
-function buildUnits(visible, measured) {
-  return [
-    ...visible.objectNodes.map((node) => {
-      const size = objectSize(node.model)
-      const dimensions = measured.get(node.id)
-      return {
-        id: node.id,
-        namespace: node.namespace ?? null,
-        kind: 'object',
-        width: dimensions?.width ?? size.width,
-        height: dimensions?.height ?? size.height,
-      }
-    }),
-    ...[...visible.collapsedGroupIds].map((namespace) => ({
-      id: `ns:${namespace}`,
-      namespace,
-      kind: 'collapsed',
-      width: COLLAPSED_GROUP_WIDTH,
-      height: COLLAPSED_GROUP_HEIGHT,
-    })),
-  ]
-}
+const GRID_COLUMNS = 6
+const GRID_X = NODE_WIDTH + 80
+const GRID_Y = 240
 
 const GRAPH_BACKGROUND = {
   gap: 10,
@@ -101,12 +63,6 @@ function GraphCanvas({ entries, selection, onSelect, selectedObjects }) {
   )
 
   const [collapsed, setCollapsed] = useState(() => new Set())
-  const [collisionGap, setCollisionGap] = useState(COLLISION_GAP_DEFAULT)
-  const [stability, setStability] = useState(STABILITY_DEFAULT)
-  const [edgeStrength, setEdgeStrength] = useState(EDGE_STRENGTH_DEFAULT)
-  const [layoutVersion, setLayoutVersion] = useState(0)
-  const [settingsOpen, setSettingsOpen] = useState(false)
-
   const visible = useMemo(
     () => buildVisibleGraph(fullObjectGraph, collapsed, objectIds),
     [fullObjectGraph, collapsed, objectIds],
@@ -134,6 +90,11 @@ function GraphCanvas({ entries, selection, onSelect, selectedObjects }) {
     }
     return map
   }, [fullObjectGraph])
+
+  const namespaceOf = useMemo(
+    () => new Map(fullObjectGraph.nodes.map((node) => [node.id, node.namespace ?? null])),
+    [fullObjectGraph],
+  )
 
   const selectedId = selectionObjectId(selection)
   const { upstream, downstream } = useMemo(
@@ -163,15 +124,6 @@ function GraphCanvas({ entries, selection, onSelect, selectedObjects }) {
     return set
   }, [selection, attributeGraph])
 
-  const revealObjectIds = useMemo(() => {
-    const set = new Set()
-    for (const ref of revealRefs) {
-      const element = index.get(ref)?.[0]
-      if (element) set.add(element.objectName)
-    }
-    return set
-  }, [revealRefs, index])
-
   const relatedObjects = useMemo(() => {
     const set = new Set()
     if (!selectedId) return set
@@ -189,41 +141,57 @@ function GraphCanvas({ entries, selection, onSelect, selectedObjects }) {
 
   const [nodes, setNodes, onNodesChange] = useNodesState([])
   const [edges, setEdges, onEdgesChange] = useEdgesState([])
-  const nodesRef = useRef([])
-  useEffect(() => {
-    nodesRef.current = nodes
-  }, [nodes])
-  const measureKey = nodes
-    .filter((node) => node.type === 'entity')
-    .map((node) => `${node.id}:${Math.round(node.measured?.width ?? 0)}:${Math.round(node.measured?.height ?? 0)}`)
-    .join('|')
 
+  const nodesRef = useRef([])
+  const namespaceOfRef = useRef(namespaceOf)
   const positionsRef = useRef(new Map())
-  const groupsGlobalRef = useRef(new Map())
-  const appliedRef = useRef({ unitsKey: '', settingsKey: '', done: false })
-  const draggingRef = useRef(new Set())
-  const visibleRef = useRef(visible)
-  const collapsedRef = useRef(collapsed)
-  const paramsRef = useRef({ collisionGap, stability, edgeStrength })
-  useEffect(() => {
-    visibleRef.current = visible
-    collapsedRef.current = collapsed
-    paramsRef.current = { collisionGap, stability, edgeStrength }
-  })
+  const lastRectsRef = useRef(new Map())
+  const gridRef = useRef(0)
+  const dragStartRef = useRef(null)
+  const appliedRef = useRef({ signature: null })
+  const handlesRef = useRef(null)
+  const pendingHandlesRef = useRef(false)
   const fittedTopology = useRef(null)
   const pendingFit = useRef(false)
 
-  const handleNodesChange = useCallback(
-    (changes) => {
-      onNodesChange(changes)
-      for (const change of changes) {
-        if (change.type !== 'position') continue
-        if (change.dragging) draggingRef.current.add(change.id)
-        else draggingRef.current.delete(change.id)
-      }
-    },
-    [onNodesChange],
-  )
+  useEffect(() => {
+    nodesRef.current = nodes
+  }, [nodes])
+
+  useEffect(() => {
+    namespaceOfRef.current = namespaceOf
+  }, [namespaceOf])
+
+  const measureKey = nodes
+    .filter((node) => node.type === 'entity')
+    .map(
+      (node) =>
+        `${node.id}:${Math.round(node.measured?.width ?? 0)}:${Math.round(node.measured?.height ?? 0)}`,
+    )
+    .join('|')
+
+  const nextDefaultPosition = useCallback(() => {
+    const slot = gridRef.current
+    gridRef.current += 1
+    return { x: (slot % GRID_COLUMNS) * GRID_X, y: Math.floor(slot / GRID_COLUMNS) * GRID_Y }
+  }, [])
+
+  const groupRects = useMemo(() => {
+    const objects = nodes
+      .filter((node) => node.type === 'entity')
+      .map((node) => {
+        const size = objectSize(node.data.model)
+        return {
+          id: node.id,
+          namespace: node.data.namespace ?? null,
+          x: node.position.x,
+          y: node.position.y,
+          width: node.measured?.width ?? size.width,
+          height: node.measured?.height ?? size.height,
+        }
+      })
+    return computeGroupRects(objects)
+  }, [nodes])
 
   const toggleGroup = useCallback((namespace) => {
     setCollapsed((previous) => {
@@ -234,153 +202,228 @@ function GraphCanvas({ entries, selection, onSelect, selectedObjects }) {
     })
   }, [])
 
-  useEffect(() => {
-    const measured = new Map(
-      nodesRef.current
-        .filter((node) => node.type === 'entity')
-        .map((node) => [node.id, node.measured]),
-    )
-    const units = buildUnits(visible, measured)
+  const handleNodesChange = useCallback(
+    (changes) => {
+      onNodesChange(changes)
+      for (const change of changes) {
+        if (change.type === 'position' && change.position) {
+          positionsRef.current.set(change.id, { x: change.position.x, y: change.position.y })
+        }
+      }
+    },
+    [onNodesChange],
+  )
 
-    const unitsKey = units.map((unit) => `${unit.id}:${unit.kind}`).sort().join('|')
-    const settingsKey = `${collisionGap}|${stability}|${edgeStrength}|${layoutVersion}`
-    const unitsChanged = appliedRef.current.unitsKey !== unitsKey
-    const settingsChanged = appliedRef.current.settingsKey !== settingsKey
+  const handleNodeDragStart = useCallback((_, node) => {
+    dragStartRef.current = {
+      id: node.id,
+      position: { x: node.position.x, y: node.position.y },
+      namespace: node.type === 'namespace' ? node.id.slice(3) : null,
+    }
+  }, [])
 
-    const sizes = new Map()
-    for (const node of nodesRef.current) {
-      if (node.type !== 'entity') continue
-      sizes.set(
-        node.id,
-        `${Math.round(node.measured?.width ?? 0)}x${Math.round(node.measured?.height ?? 0)}`,
+  const handleNodeDrag = useCallback(
+    (_, node) => {
+      const start = dragStartRef.current
+      if (!start || start.id !== node.id) return
+      if (node.type !== 'namespace' || !start.namespace) return
+      const delta = {
+        x: node.position.x - start.position.x,
+        y: node.position.y - start.position.y,
+      }
+      dragStartRef.current = { ...start, position: { x: node.position.x, y: node.position.y } }
+      if (delta.x === 0 && delta.y === 0) return
+
+      const namespace = start.namespace
+      for (const [id, position] of [...positionsRef.current]) {
+        if (id === node.id) continue
+        const unitNamespace = id.startsWith('ns:')
+          ? id.slice(3)
+          : namespaceOfRef.current.get(id)
+        if (unitNamespace && isUnderNamespace(unitNamespace, namespace)) {
+          positionsRef.current.set(id, { x: position.x + delta.x, y: position.y + delta.y })
+        }
+      }
+
+      setNodes((previous) =>
+        previous.map((item) => {
+          if (item.id === node.id) return item
+          const position = positionsRef.current.get(item.id)
+          if (!position) return item
+          if (item.position.x === position.x && item.position.y === position.y) return item
+          return { ...item, position }
+        }),
       )
-    }
-    const previousSizes = appliedRef.current.sizes ?? new Map()
-    const changedIds = []
-    for (const [id, signature] of sizes) {
-      if (previousSizes.get(id) !== signature) changedIds.push(id)
-    }
-    for (const id of previousSizes.keys()) {
-      if (!sizes.has(id)) changedIds.push(id)
-    }
-    const sizeChanged = changedIds.length > 0
-    const selectionDriven =
-      sizeChanged && changedIds.every((id) => revealObjectIds.has(id))
-    const measuredReady = [...sizes.values()].some((signature) => signature !== '0x0')
+    },
+    [setNodes],
+  )
 
-    const versionChanged =
-      !appliedRef.current.done || appliedRef.current.version !== layoutVersion
-    const unanchored = versionChanged || unitsChanged || !appliedRef.current.measured
-    const relayout =
-      !appliedRef.current.done ||
-      unitsChanged ||
-      settingsChanged ||
-      versionChanged ||
-      (sizeChanged && !selectionDriven)
-
-    if (unanchored) positionsRef.current = new Map()
-
-    const initial = unanchored
-      ? new Map()
-      : buildInitialPositions(nodesRef.current, groupsGlobalRef.current, positionsRef.current)
-
-    appliedRef.current = {
-      unitsKey,
-      settingsKey,
-      measureKey,
-      version: layoutVersion,
-      measured: appliedRef.current.measured || measuredReady,
-      sizes,
-      done: true,
-    }
-
-    let layout
-    if (relayout) {
-      layout = hierarchyLayout({
-        units,
-        edges: visible.edges,
-        collapsed,
-        options: { collisionGap, stability, edgeStrength },
-        initial,
-      })
-      positionsRef.current = layout.positions
-    } else {
-      layout = finishLayout({ units, positions: initial, collapsed })
-    }
-
-    groupsGlobalRef.current = new Map(
-      layout.groups.map((group) => [group.fullName, { x: group.x, y: group.y }]),
-    )
-
-    const specs = []
-    for (const group of layout.groups) {
-      specs.push({
-        id: group.id,
-        type: 'namespace',
-        parentId: group.parent ? `ns:${group.parent}` : undefined,
-        extent: group.parent ? 'parent' : undefined,
-        position: layout.groupRelative.get(group.id),
-        style: { width: group.width, height: group.height },
-        zIndex: 0,
-        data: {
-          label: group.label,
-          collapsed: false,
-          count: namespaceCounts.get(group.fullName) ?? 0,
-          edgeMode,
-          onToggle: toggleGroup,
-        },
-      })
+  useEffect(() => {
+    const previousRects = lastRectsRef.current
+    for (const object of visible.objectNodes) {
+      if (!positionsRef.current.has(object.id)) {
+        positionsRef.current.set(object.id, nextDefaultPosition())
+      }
     }
     for (const namespace of visible.collapsedGroupIds) {
-      const container = nearestExpandedNamespace(namespace, collapsed)
-      specs.push({
-        id: `ns:${namespace}`,
-        type: 'namespace',
-        parentId: container ? `ns:${container}` : undefined,
-        extent: container ? 'parent' : undefined,
-        position: layout.unitRelative.get(`ns:${namespace}`),
-        style: { width: COLLAPSED_GROUP_WIDTH, height: COLLAPSED_GROUP_HEIGHT },
-        zIndex: 0,
-        data: {
-          label: namespace,
-          collapsed: true,
-          count: namespaceCounts.get(namespace) ?? 0,
-          edgeMode,
-          onToggle: toggleGroup,
-        },
-      })
+      const id = `ns:${namespace}`
+      if (positionsRef.current.has(id)) continue
+      const rect = previousRects.get(namespace)
+      positionsRef.current.set(id, rect ? { x: rect.x, y: rect.y } : nextDefaultPosition())
     }
-    for (const node of visible.objectNodes) {
-      const container = nearestExpandedNamespace(node.namespace ?? null, collapsed)
-      specs.push({
-        id: node.id,
-        type: 'entity',
-        parentId: container ? `ns:${container}` : undefined,
-        extent: container ? 'parent' : undefined,
-        position: layout.unitRelative.get(node.id),
-        style: { width: NODE_WIDTH },
-        zIndex: 1,
-        data: {
-          model: node.model,
-          qualifiedName: node.id,
-          namespace: node.namespace ?? null,
-          index,
-          color: colorFor(node.id),
-          edgeMode,
-          revealRefs,
-        },
+
+    const measuredMap = new Map(
+      nodesRef.current.filter((node) => node.type === 'entity').map((node) => [node.id, node.measured]),
+    )
+    const revealKey = revealRefs.size ? [...revealRefs].sort().join(',') : ''
+    const countsKey = [...namespaceCounts.entries()].sort().join(',')
+    const objectKey = visible.objectNodes
+      .map((object) => {
+        const position = positionsRef.current.get(object.id)
+        const dimensions = measuredMap.get(object.id)
+        return `${object.id}:${position.x}:${position.y}:${dimensions?.width ?? 0}:${dimensions?.height ?? 0}`
+      })
+      .join('|')
+    const groupKey = [...groupRects]
+      .map(([fullName, rect]) => `${fullName}:${rect.x}:${rect.y}:${rect.width}:${rect.height}`)
+      .join('|')
+    const collapsedKey = [...visible.collapsedGroupIds]
+      .map((namespace) => {
+        const position = positionsRef.current.get(`ns:${namespace}`)
+        return `${namespace}:${position.x}:${position.y}`
+      })
+      .join('|')
+    const signature = `${edgeMode}~${revealKey}~${countsKey}~${objectKey}~${groupKey}~${collapsedKey}`
+
+    if (appliedRef.current.signature !== signature) {
+      appliedRef.current.signature = signature
+      setNodes((previous) => {
+        const byId = new Map(previous.map((node) => [node.id, node]))
+        const specs = []
+
+        for (const [fullName, rect] of groupRects) {
+          const id = `ns:${fullName}`
+          const existing = byId.get(id)
+          specs.push({
+            ...existing,
+            id,
+            type: 'namespace',
+            position: { x: rect.x, y: rect.y },
+            style: { width: rect.width, height: rect.height },
+            zIndex: 0,
+            data: {
+              ...existing?.data,
+              label: fullName,
+              collapsed: false,
+              count: namespaceCounts.get(fullName) ?? 0,
+              edgeMode,
+              onToggle: toggleGroup,
+            },
+          })
+        }
+
+        for (const namespace of visible.collapsedGroupIds) {
+          const id = `ns:${namespace}`
+          const existing = byId.get(id)
+          specs.push({
+            ...existing,
+            id,
+            type: 'namespace',
+            position: positionsRef.current.get(id),
+            style: { width: COLLAPSED_GROUP_WIDTH, height: COLLAPSED_GROUP_HEIGHT },
+            zIndex: 0,
+            data: {
+              ...existing?.data,
+              label: namespace,
+              collapsed: true,
+              count: namespaceCounts.get(namespace) ?? 0,
+              edgeMode,
+              onToggle: toggleGroup,
+            },
+          })
+        }
+
+        for (const object of visible.objectNodes) {
+          const existing = byId.get(object.id)
+          specs.push({
+            ...existing,
+            id: object.id,
+            type: 'entity',
+            position: positionsRef.current.get(object.id),
+            style: { width: NODE_WIDTH },
+            zIndex: 1,
+            measured: existing?.measured,
+            data: {
+              ...existing?.data,
+              model: object.model,
+              qualifiedName: object.id,
+              namespace: object.namespace ?? null,
+              index,
+              color: colorFor(object.id),
+              edgeMode,
+              revealRefs,
+            },
+          })
+        }
+
+        return specs
       })
     }
 
-    setNodes((previous) => {
-      const byId = new Map(previous.map((node) => [node.id, node]))
-      return specs.map((spec) => {
-        const existing = byId.get(spec.id)
-        const position = existing && !relayout ? existing.position : spec.position
-        return { ...existing, ...spec, position, measured: existing?.measured }
-      })
-    })
+    const topology = [
+      ...visible.objectNodes.map((object) => object.id),
+      ...[...groupRects.keys()].map((fullName) => `ns:${fullName}`),
+      ...[...visible.collapsedGroupIds].map((namespace) => `ns:${namespace}`),
+    ]
+      .sort()
+      .join(',')
+    if (fittedTopology.current !== topology) {
+      fittedTopology.current = topology
+      pendingFit.current = true
+    }
 
+    const handlesKey = `${edgeMode}~${visible.objectNodes
+      .map((object) => object.id)
+      .sort()
+      .join(',')}~${[...visible.collapsedGroupIds].sort().join(',')}`
+    if (handlesRef.current !== handlesKey) {
+      handlesRef.current = handlesKey
+      pendingHandlesRef.current = true
+    }
+
+    const timer = window.setTimeout(() => {
+      if (pendingHandlesRef.current) {
+        pendingHandlesRef.current = false
+        const handleNodeIds = [
+          ...visible.objectNodes.map((object) => object.id),
+          ...[...visible.collapsedGroupIds].map((namespace) => `ns:${namespace}`),
+        ]
+        updateNodeInternals(handleNodeIds)
+      }
+      if (pendingFit.current) {
+        pendingFit.current = false
+        fitView({ padding: 0.2, duration: 250 })
+      }
+    }, 60)
+    lastRectsRef.current = groupRects
+    return () => window.clearTimeout(timer)
+  }, [
+    visible,
+    collapsed,
+    edgeMode,
+    index,
+    namespaceCounts,
+    revealRefs,
+    groupRects,
+    measureKey,
+    nextDefaultPosition,
+    toggleGroup,
+    setNodes,
+    fitView,
+    updateNodeInternals,
+  ])
+
+  useEffect(() => {
     setEdges(
       activeEdges.map((edge) => {
         const color = colorFor(edge.source)
@@ -406,128 +449,7 @@ function GraphCanvas({ entries, selection, onSelect, selectedObjects }) {
         }
       }),
     )
-
-    const topology = specs.map((spec) => spec.id).sort().join(',')
-    if (fittedTopology.current !== topology) {
-      fittedTopology.current = topology
-      pendingFit.current = true
-    }
-    const timer = window.setTimeout(() => {
-      const handleNodeIds = [
-        ...visible.objectNodes.map((node) => node.id),
-        ...[...visible.collapsedGroupIds].map((namespace) => `ns:${namespace}`),
-      ]
-      updateNodeInternals(handleNodeIds)
-      if (pendingFit.current) {
-        pendingFit.current = false
-        fitView({ padding: 0.2, duration: 250 })
-      }
-    }, 60)
-    return () => window.clearTimeout(timer)
-  }, [
-    visible,
-    collapsed,
-    edgeMode,
-    activeEdges,
-    index,
-    namespaceCounts,
-    revealRefs,
-    revealObjectIds,
-    collisionGap,
-    stability,
-    edgeStrength,
-    layoutVersion,
-    measureKey,
-    toggleGroup,
-    setNodes,
-    setEdges,
-    fitView,
-    updateNodeInternals,
-  ])
-
-  useEffect(() => {
-    let frame = 0
-    let last = 0
-    const raf = window.requestAnimationFrame
-      ? window.requestAnimationFrame.bind(window)
-      : (callback) => window.setTimeout(() => callback(performance.now()), 16)
-    const caf = window.cancelAnimationFrame
-      ? window.cancelAnimationFrame.bind(window)
-      : window.clearTimeout
-
-    const step = (time) => {
-      frame = raf(step)
-      if (time - last < 80) return
-      last = time
-
-      const currentVisible = visibleRef.current
-      const currentCollapsed = collapsedRef.current
-      const current = nodesRef.current
-      const unitCount = currentVisible.objectNodes.length + currentVisible.collapsedGroupIds.size
-      if (unitCount === 0) return
-
-      const measured = new Map(
-        current.filter((node) => node.type === 'entity').map((node) => [node.id, node.measured]),
-      )
-      const units = buildUnits(currentVisible, measured)
-      const initial = buildInitialPositions(current, groupsGlobalRef.current, positionsRef.current)
-      const layout = hierarchyLayout({
-        units,
-        edges: currentVisible.edges,
-        collapsed: currentCollapsed,
-        options: paramsRef.current,
-        initial,
-      })
-
-      groupsGlobalRef.current = new Map(
-        layout.groups.map((group) => [group.fullName, { x: group.x, y: group.y }]),
-      )
-      positionsRef.current = layout.positions
-      const groupById = new Map(layout.groups.map((group) => [group.id, group]))
-
-      setNodes((previous) => {
-        let changed = false
-        const next = previous.map((node) => {
-          if (draggingRef.current.has(node.id)) return node
-          if (node.type === 'entity') {
-            const position = layout.unitRelative.get(node.id)
-            if (!position) return node
-            if (node.position.x === position.x && node.position.y === position.y) return node
-            changed = true
-            return { ...node, position }
-          }
-          if (node.type === 'namespace') {
-            const group = groupById.get(node.id)
-            if (group) {
-              const position = layout.groupRelative.get(node.id)
-              const width = group.width
-              const height = group.height
-              if (
-                node.position.x === position.x &&
-                node.position.y === position.y &&
-                node.style?.width === width &&
-                node.style?.height === height
-              ) {
-                return node
-              }
-              changed = true
-              return { ...node, position, style: { width, height } }
-            }
-            const position = layout.unitRelative.get(node.id)
-            if (!position) return node
-            if (node.position.x === position.x && node.position.y === position.y) return node
-            changed = true
-            return { ...node, position }
-          }
-          return node
-        })
-        return changed ? next : previous
-      })
-    }
-
-    frame = raf(step)
-    return () => caf(frame)
-  }, [setNodes])
+  }, [activeEdges, edgeMode, setEdges])
 
   const selectionKey = useMemo(
     () =>
@@ -601,10 +523,6 @@ function GraphCanvas({ entries, selection, onSelect, selectedObjects }) {
     setEdges,
   ])
 
-  const handleRelayout = useCallback(() => {
-    setLayoutVersion((value) => value + 1)
-  }, [])
-
   const handleConnect = useCallback(
     (connection) => {
       if (!connection.sourceHandle || !connection.targetHandle) return
@@ -620,6 +538,8 @@ function GraphCanvas({ entries, selection, onSelect, selectedObjects }) {
         edges={edges}
         nodeTypes={nodeTypes}
         onNodesChange={handleNodesChange}
+        onNodeDragStart={handleNodeDragStart}
+        onNodeDrag={handleNodeDrag}
         onEdgesChange={onEdgesChange}
         onConnect={handleConnect}
         elevateEdgesOnSelect={false}
@@ -648,28 +568,8 @@ function GraphCanvas({ entries, selection, onSelect, selectedObjects }) {
         proOptions={{ hideAttribution: true }}
       >
         <Background {...GRAPH_BACKGROUND} />
-        <Controls showInteractive={false}>
-          <ControlButton
-            onClick={() => setSettingsOpen((open) => !open)}
-            title="Paramètres de positionnement"
-            aria-label="Paramètres de positionnement"
-          >
-            <Settings size={14} style={{ fill: 'none' }} />
-          </ControlButton>
-        </Controls>
+        <Controls showInteractive={false} />
       </ReactFlow>
-      {settingsOpen && (
-        <LayoutSettings
-          collisionGap={collisionGap}
-          stability={stability}
-          edgeStrength={edgeStrength}
-          onCollisionGap={setCollisionGap}
-          onStability={setStability}
-          onEdgeStrength={setEdgeStrength}
-          onRelayout={handleRelayout}
-          onClose={() => setSettingsOpen(false)}
-        />
-      )}
     </div>
   )
 }

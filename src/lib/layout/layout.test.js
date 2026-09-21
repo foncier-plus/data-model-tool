@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { finishLayout, hierarchyLayout, objectHeight, objectSize } from '@/lib/layout'
+import { computeGroupRects, isUnderNamespace, objectHeight, objectSize } from '@/lib/layout'
 import { parseObjectFile } from '@/lib/model/parse'
 
 const FILES = {
@@ -26,21 +26,8 @@ function load() {
   return Object.entries(FILES).map(([fileName, text]) => parseObjectFile(fileName, text))
 }
 
-function overlaps(positions, units, padding = 0) {
-  for (let i = 0; i < units.length; i += 1) {
-    for (let j = i + 1; j < units.length; j += 1) {
-      const a = positions.get(units[i].id)
-      const b = positions.get(units[j].id)
-      const overlapX = Math.min(a.x + units[i].width, b.x + units[j].width) - Math.max(a.x, b.x)
-      const overlapY = Math.min(a.y + units[i].height, b.y + units[j].height) - Math.max(a.y, b.y)
-      if (overlapX > padding && overlapY > padding) return true
-    }
-  }
-  return false
-}
-
-function objectUnit(id, namespace, width = 300, height = 120) {
-  return { id, namespace, kind: 'object', width, height }
+function object(id, namespace, x, y, width = 300, height = 120) {
+  return { id, namespace, x, y, width, height }
 }
 
 describe('sizing', () => {
@@ -53,156 +40,50 @@ describe('sizing', () => {
   })
 })
 
-describe('hierarchyLayout', () => {
-  const UNITS = [
-    objectUnit('a', null),
-    objectUnit('b', null),
-    objectUnit('c', null),
-    objectUnit('d', null),
-    objectUnit('e', null),
-  ]
-  const EDGES = [
-    { id: 'a->b', source: 'a', target: 'b', count: 1 },
-    { id: 'b->c', source: 'b', target: 'c', count: 1 },
-    { id: 'c->d', source: 'c', target: 'd', count: 1 },
-    { id: 'd->e', source: 'd', target: 'e', count: 1 },
-  ]
-
-  it('places every unit without overlap', () => {
-    const { positions } = hierarchyLayout({ units: UNITS, edges: EDGES })
-    expect(positions.size).toBe(UNITS.length)
-    expect(overlaps(positions, UNITS)).toBe(false)
-  })
-
-  it('is deterministic for identical input', () => {
-    const first = hierarchyLayout({ units: UNITS, edges: EDGES })
-    const second = hierarchyLayout({ units: UNITS, edges: EDGES })
-    for (const unit of UNITS) {
-      expect(second.positions.get(unit.id)).toEqual(first.positions.get(unit.id))
-    }
-  })
-
-  it('places sources to the left of their targets', () => {
-    const { positions } = hierarchyLayout({ units: UNITS, edges: EDGES })
-    for (const edge of EDGES) {
-      expect(positions.get(edge.source).x).toBeLessThan(positions.get(edge.target).x)
-    }
-  })
-
-  it('returns an empty layout for no units', () => {
-    const layout = hierarchyLayout({ units: [], edges: [] })
-    expect(layout.positions.size).toBe(0)
-    expect(layout.groups).toEqual([])
+describe('isUnderNamespace', () => {
+  it('matches a namespace and its descendants', () => {
+    expect(isUnderNamespace('a.b.c', 'a')).toBe(true)
+    expect(isUnderNamespace('a', 'a')).toBe(true)
+    expect(isUnderNamespace('ab', 'a')).toBe(false)
+    expect(isUnderNamespace(null, 'a')).toBe(false)
+    expect(isUnderNamespace('a', null)).toBe(false)
   })
 })
 
-describe('namespace groups', () => {
-  const UNITS = [
-    objectUnit('a.x', 'a', 300, 100),
-    objectUnit('a.y', 'a', 300, 100),
-    objectUnit('a.b.z', 'a.b', 300, 100),
-    objectUnit('c', null, 300, 100),
-  ]
-  const EDGES = [{ id: 'a.x->c', source: 'a.x', target: 'c', count: 1 }]
+describe('computeGroupRects', () => {
+  it('wraps the objects of a namespace', () => {
+    const rects = computeGroupRects([
+      object('a.x', 'a', 100, 100),
+      object('a.y', 'a', 100, 300),
+    ])
+    const a = rects.get('a')
+    expect(a.x).toBeLessThan(100)
+    expect(a.y).toBeLessThan(100)
+    expect(a.width).toBeGreaterThan(300)
+    expect(a.height).toBeGreaterThan(380)
+  })
 
-  it('groups objects by namespace and nests sub-namespaces', () => {
-    const { groups, positions } = hierarchyLayout({ units: UNITS, edges: EDGES })
-    const names = groups.map((group) => group.fullName).sort()
-    expect(names).toEqual(['a', 'a.b'])
-
-    const parent = groups.find((group) => group.fullName === 'a')
-    const child = groups.find((group) => group.fullName === 'a.b')
+  it('nests sub-namespaces inside their parent', () => {
+    const rects = computeGroupRects([object('a.b.z', 'a.b', 0, 0)])
+    expect([...rects.keys()].sort()).toEqual(['a', 'a.b'])
+    const parent = rects.get('a')
+    const child = rects.get('a.b')
     expect(child.parent).toBe('a')
     expect(parent.x).toBeLessThanOrEqual(child.x)
     expect(parent.y).toBeLessThanOrEqual(child.y)
     expect(parent.x + parent.width).toBeGreaterThanOrEqual(child.x + child.width)
     expect(parent.y + parent.height).toBeGreaterThanOrEqual(child.y + child.height)
-    expect(positions.size).toBe(UNITS.length)
   })
 
-  it('encloses every member object', () => {
-    const { groups, positions } = hierarchyLayout({ units: UNITS, edges: EDGES })
-    const parent = groups.find((group) => group.fullName === 'a')
-    for (const unit of UNITS.filter((item) => item.id.startsWith('a'))) {
-      const position = positions.get(unit.id)
-      expect(parent.x).toBeLessThan(position.x)
-      expect(parent.y).toBeLessThan(position.y)
-      expect(parent.x + parent.width).toBeGreaterThan(position.x + unit.width)
-      expect(parent.y + parent.height).toBeGreaterThan(position.y + unit.height)
-    }
+  it('ignores objects without a namespace', () => {
+    const rects = computeGroupRects([object('root', null, 0, 0)])
+    expect(rects.size).toBe(0)
   })
 
-  it('uses a fixed size for collapsed groups', () => {
-    const units = [
-      objectUnit('c', null, 300, 100),
-      { id: 'ns:a', namespace: 'a', kind: 'collapsed', width: 220, height: 32 },
-    ]
-    const { groups, positions } = hierarchyLayout({
-      units,
-      edges: [],
-      collapsed: new Set(['a']),
-    })
-    expect(groups).toEqual([])
-    expect(positions.get('ns:a')).toBeTruthy()
-    expect(overlaps(positions, units)).toBe(false)
-  })
-})
-
-describe('stability', () => {
-  it('keeps previous relative positions when they do not conflict', () => {
-    const units = [objectUnit('a', null), objectUnit('b', null)]
-    const initial = new Map([
-      ['a', { x: 0, y: 0 }],
-      ['b', { x: 0, y: 200 }],
-    ])
-    const { positions } = hierarchyLayout({ units, edges: [], initial })
-    expect(Math.abs(positions.get('b').y - positions.get('a').y - 200)).toBeLessThan(20)
-  })
-})
-
-describe('larger graph', () => {
-  it('lays out nested namespaces without overlap', () => {
-    const units = []
-    const edges = []
-    const namespaces = ['sales', 'crm', 'finance']
-    for (const namespace of namespaces) {
-      for (let index = 0; index < 12; index += 1) {
-        units.push(objectUnit(`${namespace}.o${index}`, namespace))
-        if (index > 0) {
-          edges.push({
-            id: `${namespace}.o${index - 1}->${namespace}.o${index}`,
-            source: `${namespace}.o${index - 1}`,
-            target: `${namespace}.o${index}`,
-            count: 1,
-          })
-        }
-      }
-    }
-    edges.push({
-      id: 'sales.o5->crm.o5',
-      source: 'sales.o5',
-      target: 'crm.o5',
-      count: 1,
-    })
-    const { positions, groups } = hierarchyLayout({ units, edges })
-    expect(positions.size).toBe(units.length)
-    expect(groups.map((group) => group.fullName).sort()).toEqual([...namespaces].sort())
-    expect(overlaps(positions, units)).toBe(false)
-  })
-})
-
-describe('finishLayout', () => {
-  it('recomputes group bounds from global positions', () => {
-    const units = [objectUnit('a.x', 'a', 300, 100), objectUnit('a.y', 'a', 300, 100)]
-    const positions = new Map([
-      ['a.x', { x: 100, y: 100 }],
-      ['a.y', { x: 100, y: 240 }],
-    ])
-    const layout = finishLayout({ units, positions })
-    const group = layout.groups.find((item) => item.fullName === 'a')
-    expect(group.x).toBeLessThan(100)
-    expect(group.y).toBeLessThan(100)
-    expect(group.width).toBeGreaterThan(300)
-    expect(group.height).toBeGreaterThan(240)
+  it('moves the frame when an object moves', () => {
+    const before = computeGroupRects([object('a.x', 'a', 0, 0)]).get('a')
+    const after = computeGroupRects([object('a.x', 'a', 500, 400)]).get('a')
+    expect(after.x - before.x).toBe(500)
+    expect(after.y - before.y).toBe(400)
   })
 })

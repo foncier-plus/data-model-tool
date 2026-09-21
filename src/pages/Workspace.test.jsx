@@ -348,17 +348,6 @@ attributes:
     expect(['tiers', 'client'].map(transformOf)).toEqual(before)
   })
 
-  it('lays the graph out automatically when everything is selected', async () => {
-    const { container } = renderApp()
-    await waitForGraph(container)
-
-    const transforms = [...container.querySelectorAll('.react-flow__node')].map(
-      (node) => node.style.transform,
-    )
-    expect(transforms.length).toBe(2)
-    expect(new Set(transforms).size).toBeGreaterThan(1)
-  })
-
   it('deselects when clicking outside an object', async () => {
     const { container } = renderApp()
     await waitForGraph(container)
