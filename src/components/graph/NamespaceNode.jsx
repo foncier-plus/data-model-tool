@@ -3,7 +3,7 @@ import { ChevronDown, ChevronRight, Folder, FolderOpen } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export function NamespaceNode({ data }) {
-  const { label, collapsed, count, edgeMode, onToggle } = data
+  const { label, namespace, collapsed, count, edgeMode, onToggle } = data
   const showHandles = collapsed && edgeMode === 'aggregated'
 
   return (
@@ -24,13 +24,19 @@ export function NamespaceNode({ data }) {
         />
       ) : null}
 
-      <div className="pointer-events-auto flex h-8 w-full items-center gap-1.5 rounded-t-xl px-2 text-xs font-semibold text-muted-foreground hover:bg-black/5">
+      <div
+        className="pointer-events-auto flex h-8 w-full items-center gap-1.5 rounded-t-xl px-2 text-xs font-semibold text-muted-foreground hover:bg-black/5"
+        onClick={(event) => {
+          event.stopPropagation()
+          onToggle?.(namespace)
+        }}
+      >
         <button
           type="button"
-          aria-label={collapsed ? `Déplier ${label}` : `Replier ${label}`}
+          aria-label={collapsed ? `Déplier ${namespace}` : `Replier ${namespace}`}
           onClick={(event) => {
             event.stopPropagation()
-            onToggle?.(label)
+            onToggle?.(namespace)
           }}
           className="flex size-5 shrink-0 items-center justify-center rounded hover:bg-black/10"
         >

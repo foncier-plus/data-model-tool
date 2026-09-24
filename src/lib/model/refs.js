@@ -129,14 +129,33 @@ function pick(candidates) {
   return [...candidates].sort((a, b) => KIND_PRIORITY[a.kind] - KIND_PRIORITY[b.kind])[0]
 }
 
-export function resolveRef(ref, index, namespace = null) {
-  if (namespace) {
-    const scoped = index.get(`${namespace}.${ref}`)
-    if (scoped?.length) return pick(scoped)
-  }
-  const candidates = index.get(ref)
+function projectOf(objectName) {
+  if (!objectName) return null
+  const dot = objectName.indexOf('.')
+  return dot === -1 ? objectName : objectName.slice(0, dot)
+}
+
+function resolveScoped(index, key, project) {
+  const candidates = index.get(key)
   if (!candidates || candidates.length === 0) return null
-  return pick(candidates)
+  if (!project) return pick(candidates)
+  const scoped = candidates.filter((candidate) => projectOf(candidate.objectName) === project)
+  return scoped.length ? pick(scoped) : null
+}
+
+export function resolveRef(ref, index, namespace = null) {
+  if (!namespace) return resolveScoped(index, ref, null)
+
+  const project = namespace.split('.')[0]
+  const sameNamespace = resolveScoped(index, `${namespace}.${ref}`, project)
+  if (sameNamespace) return sameNamespace
+  const projectScoped = resolveScoped(index, `${project}.${ref}`, project)
+  if (projectScoped) return projectScoped
+  if (ref.startsWith(`${project}.`)) {
+    const explicit = resolveScoped(index, ref, project)
+    if (explicit) return explicit
+  }
+  return null
 }
 
 export function findElement(index, objectName, groupName, attributeName) {
@@ -157,20 +176,20 @@ export function validateReferences(objects) {
     const names = new Set()
     for (const attribute of model.attributes ?? []) {
       if (names.has(attribute.name)) {
-        issues.push({ code: 'duplicate', ref: attributeRef(name, null, attribute.name), message: `Duplicate attribute "${attribute.name}" in ${model.name}` })
+        issues.push({ code: 'duplicate', ref: attributeRef(name, null, attribute.name), file: entry.fileName, message: `Duplicate attribute "${attribute.name}" in ${model.name}` })
       }
       names.add(attribute.name)
     }
     const groupNames = new Set()
     for (const group of model.groups ?? []) {
       if (groupNames.has(group.name)) {
-        issues.push({ code: 'duplicate', ref: groupRef(name, group.name), message: `Duplicate group "${group.name}" in ${model.name}` })
+        issues.push({ code: 'duplicate', ref: groupRef(name, group.name), file: entry.fileName, message: `Duplicate group "${group.name}" in ${model.name}` })
       }
       groupNames.add(group.name)
       const inner = new Set()
       for (const attribute of group.attributes ?? []) {
         if (inner.has(attribute.name)) {
-          issues.push({ code: 'duplicate', ref: attributeRef(name, group.name, attribute.name), message: `Duplicate attribute "${attribute.name}" in ${model.name}.${group.name}` })
+          issues.push({ code: 'duplicate', ref: attributeRef(name, group.name, attribute.name), file: entry.fileName, message: `Duplicate attribute "${attribute.name}" in ${model.name}.${group.name}` })
         }
         inner.add(attribute.name)
       }
@@ -210,12 +229,14 @@ function detectCycles(objects, index) {
   const issues = []
   const edges = new Map()
   const nodes = new Set()
+  const fileByRef = new Map()
 
   for (const entry of objects) {
     const { model } = entry
     if (!model) continue
     for (const source of collectOrigins(model, entryName(entry))) {
       nodes.add(source.ref)
+      fileByRef.set(source.ref, entry.fileName)
       const targets = edges.get(source.ref) ?? []
       for (const ref of source.origin.from ?? []) {
         const resolved = resolveRef(ref, index, entry.namespace ?? null)
@@ -237,7 +258,12 @@ function detectCycles(objects, index) {
         const key = [...cycle].sort().join('|')
         if (!reported.has(key)) {
           reported.add(key)
-          issues.push({ code: 'cycle', ref: node, message: `Cycle detected: ${cycle.join(' → ')}` })
+          issues.push({
+            code: 'cycle',
+            ref: node,
+            file: fileByRef.get(node) ?? null,
+            message: `Cycle detected: ${cycle.join(' → ')}`,
+          })
         }
         continue
       }

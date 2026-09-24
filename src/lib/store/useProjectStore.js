@@ -18,7 +18,7 @@ import {
 } from '@/lib/model/mutations.js'
 
 const SAVE_DELAY = 700
-const SEGMENT = '[A-Za-z0-9][A-Za-z0-9._-]*'
+const SEGMENT = "[A-Za-z0-9][A-Za-z0-9._+()&',-]*(?: [A-Za-z0-9._+()&',-]+)*"
 const NAME_PATTERN = new RegExp(`^${SEGMENT}(/${SEGMENT})*$`)
 
 const saveTimers = new Map()
@@ -115,6 +115,7 @@ export const useProjectStore = create((set, get) => {
 
   return {
     entries: [],
+    namespaces: [],
     status: 'idle',
     message: null,
     conflict: null,
@@ -133,14 +134,32 @@ export const useProjectStore = create((set, get) => {
     refresh: async () => {
       set({ status: 'loading', message: null, conflict: null })
       try {
-        const { objects } = await api.list()
+        const { objects, namespaces } = await api.list()
         const entries = objects.map(toEntry)
         const index = buildIndex(entries)
         const current = get().selection
         const selection = current && resolveRef(current.ref, index) ? current : null
-        set({ entries, status: 'idle', selection })
+        set({ entries, namespaces: namespaces ?? [], status: 'idle', selection })
       } catch (error) {
         set({ status: 'error', message: error.message })
+      }
+    },
+
+    createNamespace: async (name) => {
+      if (!NAME_PATTERN.test(name)) {
+        set({ status: 'error', message: `Invalid namespace: ${name}` })
+        return null
+      }
+      try {
+        await api.createNamespace(name)
+        set((state) => ({
+          namespaces: [...state.namespaces, name].sort((a, b) => a.localeCompare(b)),
+          status: 'saved',
+        }))
+        return name
+      } catch (error) {
+        set({ status: 'error', message: error.message })
+        return null
       }
     },
 

@@ -39,6 +39,7 @@ export const groupSchema = z.object({
 
 export const objectSchema = z.object({
   name,
+  type: z.string().optional(),
   description: z.string().default(''),
   comment: z.string().default(''),
   attributes: z.array(attributeSchema).default([]),

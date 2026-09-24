@@ -7,59 +7,69 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useProjectStore } from '@/lib/store/useProjectStore'
 
-export function NewObjectDialog({ trigger }) {
+export function NewEntryDialog({ target, onClose }) {
   const createObject = useProjectStore((state) => state.createObject)
-  const [open, setOpen] = useState(false)
+  const createNamespace = useProjectStore((state) => state.createNamespace)
   const [name, setName] = useState('')
+  const [lastTarget, setLastTarget] = useState(target)
+
+  const open = Boolean(target)
+  const kind = target?.kind ?? 'object'
+
+  if (target !== lastTarget) {
+    setLastTarget(target)
+    setName('')
+  }
 
   const submit = async () => {
-    const trimmed = name.trim()
-    if (!trimmed) return
-    const created = await createObject(trimmed)
+    const value = name.trim()
+    if (!value) return
+    const full = target?.base ? `${target.base}/${value}` : value
+    const created =
+      kind === 'namespace' ? await createNamespace(full) : await createObject(full)
     if (created) {
       setName('')
-      setOpen(false)
+      onClose()
     }
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>{trigger}</DialogTrigger>
+    <Dialog
+      open={open}
+      onOpenChange={(value) => {
+        if (!value) onClose()
+      }}
+    >
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>New object</DialogTitle>
+          <DialogTitle>{kind === 'namespace' ? 'Nouveau namespace' : 'Nouvel objet'}</DialogTitle>
           <DialogDescription>
-            Creates <code>objects/&lt;name&gt;.yaml</code> on disk.
+            {target?.base ? `Dans ${target.base}` : 'À la racine'}
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-1.5">
-          <Label className="text-xs text-muted-foreground">Name</Label>
+          <Label className="text-xs text-muted-foreground">Nom</Label>
           <Input
             autoFocus
             value={name}
-            placeholder="sales/invoice"
+            placeholder={kind === 'namespace' ? 'sous-namespace' : 'objet'}
             onChange={(event) => setName(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === 'Enter') submit()
             }}
           />
-          <p className="text-xs text-muted-foreground">
-            Use <code>namespace/name</code> to place the object in a namespace. Letters, digits,
-            dot, dash and underscore only.
-          </p>
         </div>
         <DialogFooter>
-          <Button variant="ghost" onClick={() => setOpen(false)}>
-            Cancel
+          <Button variant="ghost" onClick={onClose}>
+            Annuler
           </Button>
           <Button onClick={submit} disabled={!name.trim()}>
-            Create
+            Créer
           </Button>
         </DialogFooter>
       </DialogContent>

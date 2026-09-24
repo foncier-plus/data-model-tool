@@ -3,8 +3,9 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 
 const YAML_EXTENSIONS = ['.yaml', '.yml']
-const SEGMENT = '[A-Za-z0-9][A-Za-z0-9._-]*'
+const SEGMENT = "[A-Za-z0-9][A-Za-z0-9._+()&',-]*(?: [A-Za-z0-9._+()&',-]+)*"
 const NAME_PATTERN = new RegExp(`^${SEGMENT}(/${SEGMENT})*\\.ya?ml$`)
+const NAMESPACE_PATTERN = new RegExp(`^${SEGMENT}(/${SEGMENT})*$`)
 
 export function resolveObjectsDir(root, configured = process.env.OBJECTS_DIR) {
   const value = typeof configured === 'string' ? configured.trim() : ''
@@ -67,6 +68,7 @@ export function createObjectsRepository(objectsDir) {
     const entries = await fs.readdir(directory, { withFileTypes: true })
     const files = []
     for (const entry of entries) {
+      if (entry.name.startsWith('.')) continue
       const name = prefix ? `${prefix}/${entry.name}` : entry.name
       if (entry.isDirectory()) {
         files.push(...(await walk(path.join(directory, entry.name), name)))
@@ -77,10 +79,23 @@ export function createObjectsRepository(objectsDir) {
     return files
   }
 
+  async function walkDirectories(directory, prefix = '') {
+    const entries = await fs.readdir(directory, { withFileTypes: true })
+    const directories = []
+    for (const entry of entries) {
+      if (!entry.isDirectory() || entry.name.startsWith('.')) continue
+      const name = prefix ? `${prefix}/${entry.name}` : entry.name
+      directories.push(name)
+      directories.push(...(await walkDirectories(path.join(directory, entry.name), name)))
+    }
+    return directories
+  }
+
   async function list() {
     await ensureDir()
     const files = (await walk(root)).sort((a, b) => a.localeCompare(b))
-    return Promise.all(files.map((name) => readFile(name)))
+    const namespaces = (await walkDirectories(root)).sort((a, b) => a.localeCompare(b))
+    return { objects: await Promise.all(files.map((name) => readFile(name))), namespaces }
   }
 
   async function create(name, content) {
@@ -101,6 +116,24 @@ export function createObjectsRepository(objectsDir) {
       throw error
     }
     return readFile(name)
+  }
+
+  function validateNamespace(name) {
+    if (typeof name !== 'string' || !NAMESPACE_PATTERN.test(name) || name.includes('..')) {
+      throw new ObjectsError(400, `Invalid namespace: ${name}`)
+    }
+    const resolved = path.resolve(root, name)
+    const relative = path.relative(root, resolved)
+    if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) {
+      throw new ObjectsError(400, `Invalid namespace: ${name}`)
+    }
+    return resolved
+  }
+
+  async function createNamespace(name) {
+    const directory = validateNamespace(name)
+    await fs.mkdir(directory, { recursive: true })
+    return { name }
   }
 
   async function write(name, content, baseHash) {
@@ -155,5 +188,16 @@ export function createObjectsRepository(objectsDir) {
     return readFile(to)
   }
 
-  return { root, list, read: readFile, create, write, remove, rename, hashOf, validateName }
+  return {
+    root,
+    list,
+    read: readFile,
+    create,
+    createNamespace,
+    write,
+    remove,
+    rename,
+    hashOf,
+    validateName,
+  }
 }

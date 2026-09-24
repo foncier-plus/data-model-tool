@@ -77,4 +77,35 @@ describe('OriginForm', () => {
       formula: '',
     })
   })
+
+  it('only suggests sources from the current project and hides the project name', () => {
+    const entries = [
+      {
+        qualifiedName: 'Proj A.tiers',
+        namespace: 'Proj A',
+        model: { name: 'tiers', attributes: [{ name: 'id' }] },
+      },
+      {
+        qualifiedName: 'Proj B.other',
+        namespace: 'Proj B',
+        model: { name: 'other', attributes: [{ name: 'x' }] },
+      },
+    ]
+    const { container } = render(
+      <OriginForm
+        origin={{ from: ['Proj A.tiers.id'] }}
+        onChange={() => {}}
+        resetKey="a"
+        entries={entries}
+        namespace="Proj A"
+      />,
+    )
+
+    const refs = [...container.querySelectorAll('#origin-source-options option')].map(
+      (option) => option.value,
+    )
+    expect(refs).toContain('tiers.id')
+    expect(refs).not.toContain('other.x')
+    expect(screen.getByText('tiers.id')).toBeTruthy()
+  })
 })

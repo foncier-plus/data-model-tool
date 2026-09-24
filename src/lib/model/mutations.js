@@ -1,6 +1,6 @@
 import { writeComment } from './comments.js'
 
-const OBJECT_ORDER = ['name', 'description', 'attributes', 'groups']
+const OBJECT_ORDER = ['name', 'type', 'description', 'attributes', 'groups']
 const GROUP_ORDER = ['name', 'description', 'origin', 'attributes']
 const ATTRIBUTE_ORDER = ['name', 'type', 'optional', 'example', 'description', 'origin']
 const ORIGIN_ORDER = ['from', 'formula']

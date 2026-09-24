@@ -26,6 +26,7 @@ export function FlatEdge({
     <BaseEdge
       id={id}
       path={path}
+      interactionWidth={0}
       markerEnd={markerEnd}
       style={selected ? { ...style, strokeWidth: 3.5 } : style}
     />

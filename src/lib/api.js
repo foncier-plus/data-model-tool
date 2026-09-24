@@ -23,6 +23,7 @@ export const api = {
   list: () => request(BASE),
   read: (name) => request(`${BASE}/${encodeURIComponent(name)}`),
   create: (name, content) => request(BASE, jsonOptions('POST', { name, content })),
+  createNamespace: (name) => request(`${BASE}/namespaces`, jsonOptions('POST', { name })),
   write: (name, content, baseHash) =>
     request(`${BASE}/${encodeURIComponent(name)}`, jsonOptions('PUT', { content, baseHash })),
   remove: (name, baseHash) =>

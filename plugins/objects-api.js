@@ -69,9 +69,18 @@ export function createObjectsMiddleware({ root, objectsDir }) {
         return
       }
 
+      if (name === 'namespaces') {
+        if (method !== 'POST') {
+          throw new ObjectsError(405, `Method not allowed: ${method}`)
+        }
+        const body = await readJsonBody(req)
+        send(res, 201, await repository.createNamespace(body.name))
+        return
+      }
+
       if (!name) {
         if (method === 'GET') {
-          send(res, 200, { objects: await repository.list() })
+          send(res, 200, await repository.list())
           return
         }
         if (method === 'POST') {

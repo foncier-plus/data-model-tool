@@ -64,13 +64,15 @@ function Row({
   downstream,
   hasHighlight,
   dim,
+  noTarget,
+  noSource,
   onClick,
 }) {
   const stateClass = rowStateClass({ active, upstream, downstream, hasHighlight, dim })
 
   return (
     <div className="relative">
-      {edgeMode === 'attribute' ? (
+      {edgeMode === 'attribute' && !noTarget ? (
         <Handle
           type="target"
           position={Position.Left}
@@ -126,7 +128,7 @@ function Row({
         )}
       </button>
 
-      {edgeMode === 'attribute' ? (
+      {edgeMode === 'attribute' && !noSource ? (
         <Handle
           type="source"
           position={Position.Right}
@@ -160,9 +162,15 @@ export function EntityNode({ data }) {
     upstreamRefs,
     downstreamRefs,
     hasHighlight,
+    autoCollapse = true,
+    editMode = false,
   } = data
 
   const objectSelected = highlighted || selectedRef === qualifiedName
+  const isInput = model.type === 'input'
+  const isOutput = model.type === 'output'
+  const isTerminal = isInput || isOutput
+  const rootIsCollapsed = rootCollapsed
   const rootAttributes = model.attributes ?? []
   const totalAttributes =
     rootAttributes.length +
@@ -171,7 +179,7 @@ export function EntityNode({ data }) {
   const revealKey = revealRefs?.size ? [...revealRefs].sort().join('|') : ''
   if (revealKey !== lastReveal) {
     setLastReveal(revealKey)
-    if (!highlighted) {
+    if (!highlighted && autoCollapse && !editMode) {
       if (!revealKey) {
         setExpanded((previous) => {
           const next = new Set(previous)
@@ -240,6 +248,8 @@ export function EntityNode({ data }) {
     downstream: downstreamRefs?.has(ref) ?? false,
     hasHighlight,
     dim: dimmed,
+    noTarget: isInput,
+    noSource: isOutput,
     onClick,
   })
 
@@ -247,11 +257,14 @@ export function EntityNode({ data }) {
     <div
       className={cn(
         'flex w-full flex-col overflow-hidden rounded-lg border-2 bg-card text-foreground transition-opacity',
+        isTerminal && 'border-4 border-double',
         dimmed && !objectSelected && 'opacity-30',
       )}
-      style={{ borderColor: objectSelected ? color : withAlpha(color, 0.55) }}
+      style={{
+        borderColor: isTerminal ? '#3f3f46' : objectSelected ? color : withAlpha(color, 0.55),
+      }}
     >
-      {edgeMode === 'aggregated' ? (
+      {edgeMode === 'aggregated' && !isInput ? (
         <Handle
           type="target"
           position={Position.Left}
@@ -262,10 +275,13 @@ export function EntityNode({ data }) {
 
       <button
         type="button"
-        className="flex h-8 w-full items-center gap-2 px-2 text-left text-xs font-semibold hover:brightness-95"
+        className={cn(
+          'flex h-8 w-full items-center gap-2 px-2 text-left text-xs font-semibold hover:brightness-95',
+          isTerminal && 'text-white',
+        )}
         style={{
-          background: withAlpha(color, objectSelected ? 0.42 : 0.15),
-          borderBottom: `1px solid ${withAlpha(color, 0.4)}`,
+          background: isTerminal ? '#3f3f46' : withAlpha(color, objectSelected ? 0.42 : 0.15),
+          borderBottom: `1px solid ${isTerminal ? '#27272a' : withAlpha(color, 0.4)}`,
         }}
         onClick={(event) => {
           event.stopPropagation()
@@ -279,14 +295,6 @@ export function EntityNode({ data }) {
         }}
       >
         <GripVertical className="size-3.5 shrink-0 text-muted-foreground" />
-        {namespace ? (
-          <span
-            className="shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-medium"
-            style={{ background: withAlpha(color, 0.35) }}
-          >
-            {namespace}
-          </span>
-        ) : null}
         <span className="truncate">{model.name}</span>
         <span className="flex-1" />
         <span
@@ -311,14 +319,14 @@ export function EntityNode({ data }) {
           >
             <div className="flex h-6 items-center gap-1 px-1 text-[10px] text-muted-foreground">
               <Chevron
-                collapsed={rootCollapsed}
+                collapsed={rootIsCollapsed}
                 onClick={() => setRootCollapsed((value) => !value)}
                 label="root attributes"
               />
               <span className="flex-1" />
               <span className="pr-1">{rootAttributes.length}</span>
             </div>
-            {rootCollapsed ? null : (
+            {rootIsCollapsed ? null : (
               <div className="flex flex-col gap-0.5 p-1">
                 {rootAttributes.map((attribute) => {
                   const ref = attributeRef(qualifiedName, null, attribute.name)
@@ -445,7 +453,7 @@ export function EntityNode({ data }) {
         })}
       </div>
 
-      {edgeMode === 'aggregated' ? (
+      {edgeMode === 'aggregated' && !isOutput ? (
         <Handle
           type="source"
           position={Position.Right}

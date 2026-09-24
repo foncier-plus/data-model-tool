@@ -66,6 +66,7 @@ export function toRawObject(doc) {
 
   const object = {
     name: asString(root.get('name')),
+    type: asString(root.get('type')),
     description: asString(root.get('description')),
     comment: readComment(root.items?.[0]?.key),
     attributes: [],

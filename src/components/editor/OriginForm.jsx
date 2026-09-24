@@ -6,27 +6,37 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { attributeRef, groupRef } from '@/lib/model/refs'
 
-function buildOptions(entries) {
+function projectOf(entry) {
+  return entry.namespace ? entry.namespace.split('.')[0] : null
+}
+
+function shortRef(ref, project) {
+  if (project && ref.startsWith(`${project}.`)) return ref.slice(project.length + 1)
+  return ref
+}
+
+function buildOptions(entries, project) {
   const refs = new Set()
   for (const entry of entries) {
+    if (projectOf(entry) !== project) continue
     const model = entry.model
     if (!model) continue
     const name = entry.qualifiedName ?? model.name
-    refs.add(name)
+    refs.add(shortRef(name, project))
     for (const attribute of model.attributes ?? []) {
-      refs.add(attributeRef(name, null, attribute.name))
+      refs.add(shortRef(attributeRef(name, null, attribute.name), project))
     }
     for (const group of model.groups ?? []) {
-      refs.add(groupRef(name, group.name))
+      refs.add(shortRef(groupRef(name, group.name), project))
       for (const attribute of group.attributes ?? []) {
-        refs.add(attributeRef(name, group.name, attribute.name))
+        refs.add(shortRef(attributeRef(name, group.name, attribute.name), project))
       }
     }
   }
   return [...refs].sort()
 }
 
-export function OriginForm({ origin, onChange, resetKey, entries = [] }) {
+export function OriginForm({ origin, onChange, resetKey, entries = [], namespace = null }) {
   const [sources, setSources] = useState(origin?.from ?? [])
   const [formula, setFormula] = useState(origin?.formula ?? '')
   const [draft, setDraft] = useState('')
@@ -39,7 +49,8 @@ export function OriginForm({ origin, onChange, resetKey, entries = [] }) {
     setDraft('')
   }
 
-  const refs = useMemo(() => buildOptions(entries), [entries])
+  const project = namespace ? namespace.split('.')[0] : null
+  const refs = useMemo(() => buildOptions(entries, project), [entries, project])
 
   const commit = (nextSources, nextFormula) => {
     onChange({ from: nextSources, formula: nextFormula })
@@ -109,7 +120,7 @@ export function OriginForm({ origin, onChange, resetKey, entries = [] }) {
         {sources.map((source, index) => (
           <div key={`${source}-${index}`} className="flex items-center gap-2 rounded-md border px-2 py-1">
             <code className="min-w-0 flex-1 truncate text-xs">
-              {source}
+              {shortRef(source, project)}
             </code>
             <Button
               variant="ghost"

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Save } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { serializeObject } from '@/lib/model/serialize'
 import { useProjectStore } from '@/lib/store/useProjectStore'
@@ -30,8 +31,8 @@ export function SourcePanel({ entry, selection }) {
     <div className="flex h-full min-h-0 flex-col bg-zinc-950 text-zinc-100">
       <div className="flex items-center justify-between gap-2 border-b border-zinc-800 px-3 py-2">
         <span className="truncate text-xs text-zinc-400">{selection?.ref ?? entry.fileName}</span>
-        <Button size="sm" onClick={handleApply}>
-          Apply
+        <Button size="sm" variant="ghost" aria-label="Enregistrer" title="Enregistrer" onClick={handleApply}>
+          <Save className="size-4" />
         </Button>
       </div>
       <YamlEditor value={text} onChange={setText} />

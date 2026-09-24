@@ -5,13 +5,18 @@ import { useProjectStore } from '@/lib/store/useProjectStore'
 import { attributeRef, groupRef } from '@/lib/model/refs'
 import { cn } from '@/lib/utils'
 
-function buildItems(selection) {
+function shortName(name, project) {
+  if (project && name.startsWith(`${project}.`)) return name.slice(project.length + 1)
+  return name
+}
+
+function buildItems(selection, project) {
   if (!selection) return []
   const { objectName, groupName, attributeName } = selection
   const items = [
     {
       key: 'object',
-      label: objectName,
+      label: shortName(objectName, project),
       selection: {
         kind: 'object',
         objectName,
@@ -54,12 +59,13 @@ export function Breadcrumb({ selection }) {
   const select = useProjectStore((state) => state.select)
   const deleteObject = useProjectStore((state) => state.deleteObject)
   const entries = useProjectStore((state) => state.entries)
-  const items = buildItems(selection)
   const entry = selection
     ? entries.find(
         (item) => (item.qualifiedName ?? item.model?.name) === selection.objectName,
       )
     : null
+  const project = entry?.namespace ? entry.namespace.split('.')[0] : null
+  const items = buildItems(selection, project)
 
   if (items.length === 0) {
     return (

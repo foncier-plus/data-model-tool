@@ -117,4 +117,17 @@ describe('buildNamespaceTree', () => {
     expect([...a.folders.keys()]).toEqual(['b'])
     expect(subtreeObjectIds(a)).toEqual(new Set(['a.x', 'a.b.y']))
   })
+
+  it('falls back to the file base name without the project', () => {
+    const tree = buildNamespaceTree([
+      {
+        qualifiedName: 'Projet Foncier+.FONCIER_PLUS.friches',
+        namespace: 'Projet Foncier+.FONCIER_PLUS',
+        fileName: 'Projet Foncier+/FONCIER_PLUS/friches.yaml',
+        model: null,
+      },
+    ])
+    const foncier = tree.folders.get('Projet Foncier+').folders.get('FONCIER_PLUS')
+    expect(foncier.files[0].name).toBe('friches')
+  })
 })

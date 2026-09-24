@@ -13,6 +13,17 @@ function load(files) {
   return Object.entries(files).map(([fileName, text]) => parseObjectFile(fileName, text))
 }
 
+function entry(fileName, text) {
+  const parsed = parseObjectFile(fileName, text)
+  const filePath = fileName.replace(/\.ya?ml$/, '')
+  const slash = filePath.lastIndexOf('/')
+  return {
+    ...parsed,
+    qualifiedName: filePath.replace(/\//g, '.'),
+    namespace: slash === -1 ? null : filePath.slice(0, slash).replace(/\//g, '.'),
+  }
+}
+
 const TIERS = `name: tiers
 attributes:
   - name: id
@@ -131,5 +142,47 @@ attributes:
     expect(attributeRef('client', null, 'id')).toBe('client.id')
     expect(attributeRef('client', 'identity', 'id')).toBe('client.id')
     expect(groupRef('client', 'identity')).toBe('client.identity')
+  })
+
+  it('does not resolve references across projects', () => {
+    const entries = [
+      entry('sales/tiers.yaml', 'name: tiers\nattributes:\n  - name: id\n    type: string\n'),
+      entry(
+        'crm/client.yaml',
+        'name: client\nattributes:\n  - name: id\n    origin:\n      from: [tiers.id]\n      formula: tiers.id\n',
+      ),
+    ]
+    const issues = validateReferences(entries)
+    expect(issues.some((issue) => issue.code === 'unresolved' && issue.from === 'tiers.id')).toBe(
+      true,
+    )
+  })
+
+  it('resolves references within a project whose name contains spaces', () => {
+    const entries = [
+      entry(
+        'Mon Projet/tiers.yaml',
+        'name: tiers\nattributes:\n  - name: id\n    type: string\n',
+      ),
+      entry(
+        'Mon Projet/client.yaml',
+        'name: client\nattributes:\n  - name: id\n    origin:\n      from: [tiers.id]\n      formula: tiers.id\n',
+      ),
+    ]
+    expect(validateReferences(entries)).toEqual([])
+  })
+
+  it('resolves a project-relative reference to another sub-namespace', () => {
+    const entries = [
+      entry(
+        'proj/ref/tiers.yaml',
+        'name: tiers\nattributes:\n  - name: id\n    type: string\n',
+      ),
+      entry(
+        'proj/app/client.yaml',
+        'name: client\nattributes:\n  - name: id\n    origin:\n      from: [ref.tiers.id]\n      formula: ref.tiers.id\n',
+      ),
+    ]
+    expect(validateReferences(entries)).toEqual([])
   })
 })

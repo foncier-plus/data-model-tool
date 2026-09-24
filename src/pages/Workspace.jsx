@@ -1,15 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   AlertTriangle,
-  CheckCircle2,
   Code,
   Info,
   List,
-  Loader2,
   PanelRightClose,
   PanelRightOpen,
-  Plus,
-  RefreshCw,
   Sigma,
   Workflow,
 } from 'lucide-react'
@@ -18,7 +14,6 @@ import { Breadcrumb } from '@/components/panels/Breadcrumb'
 import { ConflictDialog } from '@/components/ConflictDialog'
 import { ExplorerPanel } from '@/components/panels/ExplorerPanel'
 import { GraphView } from '@/components/graph/GraphView'
-import { NewObjectDialog } from '@/components/NewObjectDialog'
 import { FormulaPanel } from '@/components/panels/FormulaPanel'
 import { Inspector } from '@/components/panels/Inspector'
 import { SourcePanel } from '@/components/panels/SourcePanel'
@@ -31,63 +26,50 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
-import { Separator } from '@/components/ui/separator'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { buildIndex, validateReferences } from '@/lib/model/refs'
+import { buildIndex, resolveRef, validateReferences } from '@/lib/model/refs'
 import { resolveSelection } from '@/lib/selection'
 import { useProjectStore } from '@/lib/store/useProjectStore'
 
-function StatusBadge({ status, message }) {
-  if (status === 'loading') {
-    return (
-      <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        <Loader2 className="size-3.5 animate-spin" /> Loading…
-      </span>
-    )
-  }
-  if (status === 'saving') {
-    return (
-      <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        <Loader2 className="size-3.5 animate-spin" /> Saving…
-      </span>
-    )
-  }
-  if (status === 'error') {
-    return (
-      <span className="flex items-center gap-1.5 text-xs text-destructive">
-        <AlertTriangle className="size-3.5" /> {message ?? 'Error'}
-      </span>
-    )
-  }
-  return (
-    <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-      <CheckCircle2 className="size-3.5 text-emerald-500" /> Saved to disk
-    </span>
-  )
+function projectOfFile(fileName) {
+  if (!fileName) return null
+  const slash = fileName.indexOf('/')
+  return slash === -1 ? null : fileName.slice(0, slash)
 }
 
-function IssuesDialog({ issues }) {
+function IssuesDialog({ issues, project, onSelectIssue }) {
+  const [open, setOpen] = useState(false)
+  const visible = project ? issues.filter((issue) => projectOfFile(issue.file) === project) : issues
+
   return (
-    <Dialog>
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm" disabled={issues.length === 0}>
+        <Button variant="outline" size="sm" disabled={visible.length === 0}>
           <AlertTriangle />
-          {issues.length} issue{issues.length > 1 ? 's' : ''}
+          {visible.length} issue{visible.length > 1 ? 's' : ''}
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Model issues</DialogTitle>
+          <DialogTitle>{project ? `Issues · ${project}` : 'Model issues'}</DialogTitle>
           <DialogDescription>
             Unresolved references, duplicates, self references and cycles.
           </DialogDescription>
         </DialogHeader>
         <div className="flex max-h-[60vh] flex-col gap-1 overflow-auto">
-          {issues.map((issue, index) => (
-            <div key={index} className="flex items-start gap-2 rounded border p-2 text-xs">
+          {visible.map((issue, index) => (
+            <button
+              key={`${issue.code}-${issue.ref}-${index}`}
+              type="button"
+              onClick={() => {
+                onSelectIssue(issue)
+                setOpen(false)
+              }}
+              className="flex items-start gap-2 rounded border p-2 text-left text-xs hover:bg-accent"
+            >
               <code className="shrink-0 rounded bg-muted px-1">{issue.code}</code>
               <span>{issue.message}</span>
-            </div>
+            </button>
           ))}
         </div>
       </DialogContent>
@@ -97,14 +79,14 @@ function IssuesDialog({ issues }) {
 
 export default function Workspace() {
   const entries = useProjectStore((state) => state.entries)
+  const namespaces = useProjectStore((state) => state.namespaces)
   const selection = useProjectStore((state) => state.selection)
-  const status = useProjectStore((state) => state.status)
-  const message = useProjectStore((state) => state.message)
   const panelTab = useProjectStore((state) => state.panelTab)
   const setPanelTab = useProjectStore((state) => state.setPanelTab)
   const refresh = useProjectStore((state) => state.refresh)
   const select = useProjectStore((state) => state.select)
 
+  const [explorerWidth, setExplorerWidth] = useState(256)
   const [panelWidth, setPanelWidth] = useState(380)
   const [collapsed, setCollapsed] = useState(false)
   const [selectedObjects, setSelectedObjects] = useState(() => new Set())
@@ -117,12 +99,40 @@ export default function Workspace() {
   const issues = useMemo(() => validateReferences(entries), [entries])
   const resolved = useMemo(() => resolveSelection(entries, selection), [entries, selection])
 
-  const startResize = (event) => {
+  const selectionKind = selection?.kind ?? null
+  const showAttributes = selectionKind === 'object' || selectionKind === 'group'
+  const showSource = selectionKind === 'object'
+
+  const selectedProject = useMemo(() => {
+    for (const id of selectedObjects) {
+      const entry = entries.find((item) => item.qualifiedName === id)
+      if (entry?.namespace) return entry.namespace.split('.')[0]
+    }
+    return null
+  }, [selectedObjects, entries])
+
+  useEffect(() => {
+    document.title = selectedProject ? `${selectedProject} · Data Flow` : 'Data Flow'
+  }, [selectedProject])
+
+  const handleSelectIssue = (issue) => {
+    const element = resolveRef(issue.ref, index)
+    if (!element) return
+    select({
+      kind: element.kind,
+      objectName: element.objectName,
+      groupName: element.groupName ?? null,
+      attributeName: element.attributeName ?? null,
+      ref: element.ref,
+    })
+  }
+
+  const startResize = (event, { width, setWidth, min, max, invert }) => {
     event.preventDefault()
-    const start = { x: event.clientX, width: panelWidth }
+    const startX = event.clientX
     const onMove = (moveEvent) => {
-      const next = Math.min(760, Math.max(260, start.width + (start.x - moveEvent.clientX)))
-      setPanelWidth(next)
+      const delta = invert ? startX - moveEvent.clientX : moveEvent.clientX - startX
+      setWidth(Math.min(max, Math.max(min, width + delta)))
     }
     const onUp = () => {
       window.removeEventListener('mousemove', onMove)
@@ -140,23 +150,16 @@ export default function Workspace() {
             <Workflow className="size-4" />
           </span>
           <span className="text-sm font-semibold">Data Flow</span>
+          {selectedProject ? (
+            <span data-project-title={selectedProject} className="text-lg font-bold">
+              {selectedProject}
+            </span>
+          ) : null}
         </div>
-        <Separator orientation="vertical" className="h-5" />
-        <StatusBadge status={status} message={message} />
         <div className="flex-1" />
-        <IssuesDialog issues={issues} />
-        <Button variant="outline" size="sm" onClick={refresh}>
-          <RefreshCw />
-          Refresh
-        </Button>
-        <NewObjectDialog
-          trigger={
-            <Button size="sm">
-              <Plus />
-              New object
-            </Button>
-          }
-        />
+        {selectedProject ? (
+          <IssuesDialog issues={issues} project={selectedProject} onSelectIssue={handleSelectIssue} />
+        ) : null}
         <Button
           variant="ghost"
           size="icon"
@@ -170,9 +173,28 @@ export default function Workspace() {
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <ExplorerPanel
           entries={entries}
+          namespaces={namespaces}
           selectedObjects={selectedObjects}
           onChange={setSelectedObjects}
+          onRefresh={refresh}
+          width={explorerWidth}
         />
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          onMouseDown={(event) =>
+            startResize(event, {
+              width: explorerWidth,
+              setWidth: setExplorerWidth,
+              min: 180,
+              max: 520,
+              invert: false,
+            })
+          }
+          className="group flex w-1.5 shrink-0 cursor-col-resize items-center justify-center"
+        >
+          <span className="h-full w-px bg-border transition-all group-hover:w-0.5 group-hover:bg-primary" />
+        </div>
         <main className="h-full min-h-0 flex-1 overflow-hidden">
           <GraphView
             entries={entries}
@@ -186,14 +208,24 @@ export default function Workspace() {
           <div
             role="separator"
             aria-orientation="vertical"
-            onMouseDown={startResize}
-            className="w-1.5 shrink-0 cursor-col-resize bg-border transition-colors hover:bg-primary"
-          />
+            onMouseDown={(event) =>
+              startResize(event, {
+                width: panelWidth,
+                setWidth: setPanelWidth,
+                min: 260,
+                max: 760,
+                invert: true,
+              })
+            }
+            className="group flex w-1.5 shrink-0 cursor-col-resize items-center justify-center"
+          >
+            <span className="h-full w-px bg-border transition-all group-hover:w-0.5 group-hover:bg-primary" />
+          </div>
         )}
 
         <aside
           style={collapsed ? undefined : { width: panelWidth }}
-          className={`h-full min-h-0 flex-col overflow-hidden border-l ${
+          className={`h-full min-h-0 flex-col overflow-hidden ${
             collapsed ? 'hidden' : 'flex shrink-0'
           }`}
         >
@@ -209,18 +241,24 @@ export default function Workspace() {
                   <Info className="size-3.5" />
                   About
                 </TabsTrigger>
-                <TabsTrigger value="attributes" className="flex-1 text-xs">
-                  <List className="size-3.5" />
-                  Attributes
-                </TabsTrigger>
-                <TabsTrigger value="formula" className="flex-1 text-xs">
-                  <Sigma className="size-3.5" />
-                  Formulas
-                </TabsTrigger>
-                <TabsTrigger value="source" className="flex-1 text-xs">
-                  <Code className="size-3.5" />
-                  Source
-                </TabsTrigger>
+                {showAttributes ? (
+                  <TabsTrigger value="attributes" className="flex-1 text-xs">
+                    <List className="size-3.5" />
+                    Attributes
+                  </TabsTrigger>
+                ) : null}
+                {showAttributes ? (
+                  <TabsTrigger value="formula" className="flex-1 text-xs">
+                    <Sigma className="size-3.5" />
+                    Formulas
+                  </TabsTrigger>
+                ) : null}
+                {showSource ? (
+                  <TabsTrigger value="source" className="flex-1 text-xs">
+                    <Code className="size-3.5" />
+                    Source
+                  </TabsTrigger>
+                ) : null}
               </TabsList>
             </div>
             <TabsContent value="edit" className="m-0 min-h-0 flex-1">

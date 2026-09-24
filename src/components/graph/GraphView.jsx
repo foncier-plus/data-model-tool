@@ -11,7 +11,7 @@ import {
   useUpdateNodeInternals,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { buildIndex } from '@/lib/model/refs'
+import { attributeRef, buildIndex } from '@/lib/model/refs'
 import {
   buildAttributeEdges,
   buildObjectGraph,
@@ -27,6 +27,7 @@ import { colorFor } from '@/lib/colors'
 import { useProjectStore } from '@/lib/store/useProjectStore'
 import { EntityNode } from './EntityNode'
 import { FlatEdge } from './FlatEdge'
+import { GraphSettings } from './GraphSettings'
 import { NamespaceNode } from './NamespaceNode'
 import {
   COLLAPSED_GROUP_HEIGHT,
@@ -48,6 +49,11 @@ const GRAPH_BACKGROUND = {
   bgColor: 'var(--graph-background)',
 }
 
+function groupLabel(fullName, project) {
+  if (project && fullName.startsWith(`${project}.`)) return fullName.slice(project.length + 1)
+  return fullName
+}
+
 function GraphCanvas({ entries, selection, onSelect, selectedObjects }) {
   const { fitView } = useReactFlow()
   const updateNodeInternals = useUpdateNodeInternals()
@@ -63,12 +69,26 @@ function GraphCanvas({ entries, selection, onSelect, selectedObjects }) {
   )
 
   const [collapsed, setCollapsed] = useState(() => new Set())
+  const [autoCollapse, setAutoCollapse] = useState(true)
+  const [editMode, setEditMode] = useState(false)
   const visible = useMemo(
     () => buildVisibleGraph(fullObjectGraph, collapsed, objectIds),
     [fullObjectGraph, collapsed, objectIds],
   )
 
-  const edgeMode = selection?.kind === 'attribute' ? 'attribute' : 'aggregated'
+  const project = useMemo(() => {
+    for (const node of visible.objectNodes) {
+      if (node.namespace) return node.namespace.split('.')[0]
+    }
+    return null
+  }, [visible])
+
+  const contentKey = useMemo(
+    () => visible.objectNodes.map((object) => `${object.id}:${JSON.stringify(object.model)}`).join('|'),
+    [visible],
+  )
+
+  const edgeMode = editMode || selection?.kind === 'attribute' ? 'attribute' : 'aggregated'
 
   const activeEdges = useMemo(() => {
     if (edgeMode === 'attribute') {
@@ -138,6 +158,18 @@ function GraphCanvas({ entries, selection, onSelect, selectedObjects }) {
     }
     return set
   }, [selectedId, upstream, downstream, edgeMode, refNeighbors, index])
+
+  const selectedGroupRefs = useMemo(() => {
+    if (selection?.kind !== 'group') return null
+    const entry = entries.find((item) => item.qualifiedName === selection.objectName)
+    const group = entry?.model?.groups?.find((item) => item.name === selection.groupName)
+    if (!group) return null
+    return new Set(
+      (group.attributes ?? []).map((attribute) =>
+        attributeRef(selection.objectName, group.name, attribute.name),
+      ),
+    )
+  }, [selection, entries])
 
   const [nodes, setNodes, onNodesChange] = useNodesState([])
   const [edges, setEdges, onEdgesChange] = useEdgesState([])
@@ -336,7 +368,7 @@ function GraphCanvas({ entries, selection, onSelect, selectedObjects }) {
         return `${namespace}:${position.x}:${position.y}`
       })
       .join('|')
-    const signature = `${edgeMode}~${revealKey}~${countsKey}~${objectKey}~${groupKey}~${collapsedKey}`
+    const signature = `${edgeMode}~${autoCollapse}~${revealKey}~${countsKey}~${objectKey}~${groupKey}~${collapsedKey}~${contentKey}`
 
     if (appliedRef.current.signature !== signature) {
       appliedRef.current.signature = signature
@@ -345,18 +377,21 @@ function GraphCanvas({ entries, selection, onSelect, selectedObjects }) {
         const specs = []
 
         for (const [fullName, rect] of groupRects) {
+          if (fullName === project) continue
           const id = `ns:${fullName}`
           const existing = byId.get(id)
           specs.push({
             ...existing,
             id,
             type: 'namespace',
+            selectable: false,
             position: { x: rect.x, y: rect.y },
             style: { width: rect.width, height: rect.height },
             zIndex: 0,
             data: {
               ...existing?.data,
-              label: fullName,
+              label: groupLabel(fullName, project),
+              namespace: fullName,
               collapsed: false,
               count: namespaceCounts.get(fullName) ?? 0,
               edgeMode,
@@ -372,12 +407,14 @@ function GraphCanvas({ entries, selection, onSelect, selectedObjects }) {
             ...existing,
             id,
             type: 'namespace',
+            selectable: false,
             position: positionsRef.current.get(id),
             style: { width: COLLAPSED_GROUP_WIDTH, height: COLLAPSED_GROUP_HEIGHT },
             zIndex: 0,
             data: {
               ...existing?.data,
-              label: namespace,
+              label: groupLabel(namespace, project),
+              namespace,
               collapsed: true,
               count: namespaceCounts.get(namespace) ?? 0,
               edgeMode,
@@ -405,6 +442,8 @@ function GraphCanvas({ entries, selection, onSelect, selectedObjects }) {
               color: colorFor(object.id),
               edgeMode,
               revealRefs,
+              autoCollapse,
+              editMode,
             },
           })
         }
@@ -457,6 +496,10 @@ function GraphCanvas({ entries, selection, onSelect, selectedObjects }) {
     namespaceCounts,
     revealRefs,
     groupRects,
+    project,
+    contentKey,
+    autoCollapse,
+    editMode,
     units,
     sizes,
     measureKey,
@@ -533,15 +576,27 @@ function GraphCanvas({ entries, selection, onSelect, selectedObjects }) {
 
     setEdges((previous) =>
       previous.map((edge) => {
-        const isRelated =
-          edgeMode === 'aggregated'
-            ? !selectedId || edge.source === selectedId || edge.target === selectedId
-            : !selection || edge.sourceRef === selection.ref || edge.targetRef === selection.ref
+        const hasSelection = edgeMode === 'aggregated' ? Boolean(selectedId) : Boolean(selection)
+        const isRelated = (() => {
+          if (edgeMode === 'aggregated') {
+            return !selectedId || edge.source === selectedId || edge.target === selectedId
+          }
+          if (!selection) return true
+          if (selection.kind === 'attribute') {
+            return edge.sourceRef === selection.ref || edge.targetRef === selection.ref
+          }
+          if (selection.kind === 'group') {
+            return (
+              selectedGroupRefs?.has(edge.sourceRef) === true ||
+              selectedGroupRefs?.has(edge.targetRef) === true
+            )
+          }
+          return edge.source === selectedId || edge.target === selectedId
+        })()
         const isUpstream =
           edgeMode === 'aggregated'
             ? edge.target === selectedId
             : edge.targetRef === selection?.ref
-        const hasSelection = edgeMode === 'aggregated' ? Boolean(selectedId) : Boolean(selection)
         const emphasized = hasSelection && isRelated
         const hidden = hasSelection && !isRelated
         return {
@@ -561,6 +616,7 @@ function GraphCanvas({ entries, selection, onSelect, selectedObjects }) {
     edgeMode,
     selectedId,
     selection,
+    selectedGroupRefs,
     relatedObjects,
     refNeighbors,
     revealRefs,
@@ -578,6 +634,12 @@ function GraphCanvas({ entries, selection, onSelect, selectedObjects }) {
 
   return (
     <div className="relative h-full w-full">
+      <GraphSettings
+        autoCollapse={autoCollapse}
+        editMode={editMode}
+        onAutoCollapse={setAutoCollapse}
+        onEditMode={setEditMode}
+      />
       <ReactFlow
         nodes={nodes}
         edges={edges}

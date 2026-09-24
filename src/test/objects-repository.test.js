@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -58,12 +58,13 @@ describe('objects repository namespaces', () => {
     await repo.create('crm/client.yaml', 'name: client\n')
     await repo.create('root.yaml', 'name: root\n')
 
-    const list = await repo.list()
-    expect(list.map((file) => file.name)).toEqual([
+    const { objects, namespaces } = await repo.list()
+    expect(objects.map((file) => file.name)).toEqual([
       'crm/client.yaml',
       'root.yaml',
       'sales/client.yaml',
     ])
+    expect(namespaces).toEqual(['crm', 'sales'])
     expect((await repo.read('sales/client.yaml')).content).toContain('name: client')
   })
 
@@ -71,5 +72,39 @@ describe('objects repository namespaces', () => {
     const repo = await repository()
     await expect(repo.read('../secret.yaml')).rejects.toThrow()
     await expect(repo.create('a/../../b.yaml', 'name: b\n')).rejects.toThrow()
+  })
+
+  it('accepts project and namespace names containing spaces and special characters', async () => {
+    const repo = await repository()
+    await repo.create('Projet Foncier+/FONCIER_PLUS/bati.yaml', 'name: bati\n')
+    await repo.create('Fichier DINNOV/parcelle disponible.yaml', 'name: parcelle\n')
+
+    const { objects } = await repo.list()
+    expect(objects.map((file) => file.name)).toEqual([
+      'Fichier DINNOV/parcelle disponible.yaml',
+      'Projet Foncier+/FONCIER_PLUS/bati.yaml',
+    ])
+    expect((await repo.read('Projet Foncier+/FONCIER_PLUS/bati.yaml')).content).toContain(
+      'name: bati',
+    )
+  })
+
+  it('creates an empty namespace that is listed', async () => {
+    const repo = await repository()
+    await repo.createNamespace('Projet Foncier+/Nouveau')
+    const { namespaces } = await repo.list()
+    expect(namespaces).toContain('Projet Foncier+/Nouveau')
+  })
+
+  it('ignores hidden files and directories', async () => {
+    const repo = await repository()
+    await repo.create('visible.yaml', 'name: visible\n')
+    await mkdir(path.join(repo.root, '.hidden'), { recursive: true })
+    await writeFile(path.join(repo.root, '.hidden', 'x.yaml'), 'name: x\n')
+    await writeFile(path.join(repo.root, '.secret.yaml'), 'name: secret\n')
+
+    const { objects, namespaces } = await repo.list()
+    expect(objects.map((file) => file.name)).toEqual(['visible.yaml'])
+    expect(namespaces).toEqual([])
   })
 })

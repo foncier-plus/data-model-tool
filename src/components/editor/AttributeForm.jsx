@@ -142,6 +142,7 @@ export function AttributeForm({ entry, entries, groupIndex, attributeIndex, attr
       <OriginForm
         origin={attribute.origin}
         entries={entries}
+        namespace={entry.namespace ?? null}
         resetKey={resetKey}
         onChange={(origin) =>
           setAttributeField(fileName, groupIndex, attributeIndex, 'origin', origin)
