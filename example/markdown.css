@@ -1,0 +1,27 @@
+:root {
+  font-family: "Muli";
+  font-weight: 200;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: "Plume DaMa";
+  font-weight: 400;
+  color: #444;
+  border-bottom: 2px solid #9BE;
+}
+
+h1 {
+  margin-top: 0;
+}
+
+table {
+  background: white;
+  overflow: hidden;
+  border: 1px solid ;
+  border-radius: 10px;
+  box-shadow: 0 0 2px #0002;
+}
+
+table th {
+  background: #f4f4f4;
+}

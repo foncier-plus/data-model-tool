@@ -1,5 +1,5 @@
 import { Handle, Position } from '@xyflow/react'
-import { ChevronDown, ChevronRight, Folder, FolderOpen } from 'lucide-react'
+import { ChevronDown, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export function NamespaceNode({ data }) {
@@ -9,59 +9,46 @@ export function NamespaceNode({ data }) {
   return (
     <div
       className={cn(
-        'namespace-node pointer-events-none h-full w-full rounded-xl border-2 border-dashed',
+        'namespace-node pointer-events-none h-full w-full overflow-hidden rounded-lg border-2 border-dashed',
         collapsed
-          ? 'border-zinc-400/70 dark:border-zinc-500/70'
-          : 'border-zinc-400/50 dark:border-zinc-500/40',
+          ? 'border-sky-400/70 bg-sky-100/40 dark:border-sky-700/70 dark:bg-sky-900/30'
+          : 'border-sky-300/70 bg-sky-50/40 dark:border-sky-800/60 dark:bg-sky-950/20',
       )}
     >
       {showHandles ? (
         <Handle
           type="target"
           position={Position.Left}
-          className="!size-2 !border-0 !bg-zinc-400"
-          style={{ top: 16 }}
+          className="!size-2 !border-0 !bg-sky-400"
+          style={{ top: 14, pointerEvents: 'auto' }}
         />
       ) : null}
 
-      <div
-        className="pointer-events-auto flex h-8 w-full items-center gap-1.5 rounded-t-xl px-2 text-xs font-semibold text-muted-foreground hover:bg-black/5"
+      <button
+        type="button"
         onClick={(event) => {
           event.stopPropagation()
           onToggle?.(namespace)
         }}
+        aria-label={collapsed ? `Déplier ${namespace}` : `Replier ${namespace}`}
+        className="pointer-events-auto flex h-7 w-full items-center gap-1 rounded-t-lg px-2 text-xs font-semibold text-sky-700 hover:bg-sky-100/70 dark:text-sky-300 dark:hover:bg-sky-900/40"
       >
-        <button
-          type="button"
-          aria-label={collapsed ? `Déplier ${namespace}` : `Replier ${namespace}`}
-          onClick={(event) => {
-            event.stopPropagation()
-            onToggle?.(namespace)
-          }}
-          className="flex size-5 shrink-0 items-center justify-center rounded hover:bg-black/10"
-        >
-          {collapsed ? (
-            <ChevronRight className="size-3.5" />
-          ) : (
-            <ChevronDown className="size-3.5" />
-          )}
-        </button>
         {collapsed ? (
-          <Folder className="size-3.5 shrink-0" />
+          <ChevronRight className="size-3.5 shrink-0" />
         ) : (
-          <FolderOpen className="size-3.5 shrink-0" />
+          <ChevronDown className="size-3.5 shrink-0" />
         )}
-        <span className="truncate font-mono text-[11px]">{label}</span>
+        <span className="truncate">{label}</span>
         <span className="flex-1" />
-        <span className="text-[10px] font-normal">{count}</span>
-      </div>
+        <span className="text-[10px] font-normal opacity-70">{count}</span>
+      </button>
 
       {showHandles ? (
         <Handle
           type="source"
           position={Position.Right}
-          className="!size-2 !border-0 !bg-zinc-400"
-          style={{ top: 16 }}
+          className="!size-2 !border-0 !bg-sky-400"
+          style={{ top: 14, pointerEvents: 'auto' }}
         />
       ) : null}
     </div>

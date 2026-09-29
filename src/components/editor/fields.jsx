@@ -17,7 +17,7 @@ export function FieldRow({ label, children, className }) {
 export function TextField({ label, value, onChange, placeholder, disabled }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <Label className="text-xs text-muted-foreground">{label}</Label>
+      {label ? <Label className="text-xs text-muted-foreground">{label}</Label> : null}
       <Input
         value={value ?? ''}
         placeholder={placeholder}
@@ -42,7 +42,7 @@ export function TextAreaField({ label, value, onChange, placeholder, rows = 3 })
   )
 }
 
-export function BlurInput({ label, value, onCommit, placeholder, hint }) {
+export function BlurInput({ label, value, onCommit, placeholder, hint, allowEmpty = false }) {
   const [draft, setDraft] = useState(value ?? '')
   const [lastValue, setLastValue] = useState(value ?? '')
 
@@ -53,7 +53,8 @@ export function BlurInput({ label, value, onCommit, placeholder, hint }) {
 
   const commit = () => {
     const next = draft.trim()
-    if (next && next !== value) onCommit(next)
+    const changed = allowEmpty ? next !== (value ?? '') : Boolean(next) && next !== value
+    if (changed) onCommit(next)
     else setDraft(value ?? '')
   }
 

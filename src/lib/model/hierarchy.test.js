@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  buildNamespaceTree,
   buildVisibleGraph,
   filterObjectIds,
   namespaceParent,
@@ -8,7 +7,6 @@ import {
   nearestCollapsedAncestor,
   nearestExpandedNamespace,
   proxyId,
-  subtreeObjectIds,
 } from '@/lib/model/hierarchy'
 
 const GRAPH = {
@@ -99,35 +97,8 @@ describe('filterObjectIds', () => {
     const ids = filterObjectIds(GRAPH, new Set(['c']))
     expect([...ids].sort()).toEqual(['a.x', 'a.y', 'c'])
   })
-})
 
-describe('buildNamespaceTree', () => {
-  const entries = [
-    { qualifiedName: 'a.x', namespace: 'a', model: { name: 'x' } },
-    { qualifiedName: 'a.b.y', namespace: 'a.b', model: { name: 'y' } },
-    { qualifiedName: 'root', namespace: null, model: { name: 'root' } },
-  ]
-
-  it('nests directories and lists files', () => {
-    const tree = buildNamespaceTree(entries)
-    expect(tree.files.map((file) => file.qualifiedName)).toEqual(['root'])
-    expect([...tree.folders.keys()]).toEqual(['a'])
-    const a = tree.folders.get('a')
-    expect(a.files.map((file) => file.qualifiedName)).toEqual(['a.x'])
-    expect([...a.folders.keys()]).toEqual(['b'])
-    expect(subtreeObjectIds(a)).toEqual(new Set(['a.x', 'a.b.y']))
-  })
-
-  it('falls back to the file base name without the project', () => {
-    const tree = buildNamespaceTree([
-      {
-        qualifiedName: 'Projet Foncier+.FONCIER_PLUS.friches',
-        namespace: 'Projet Foncier+.FONCIER_PLUS',
-        fileName: 'Projet Foncier+/FONCIER_PLUS/friches.yaml',
-        model: null,
-      },
-    ])
-    const foncier = tree.folders.get('Projet Foncier+').folders.get('FONCIER_PLUS')
-    expect(foncier.files[0].name).toBe('friches')
+  it('returns null when there is no filter', () => {
+    expect(filterObjectIds(GRAPH, null)).toBeNull()
   })
 })

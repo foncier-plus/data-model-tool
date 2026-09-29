@@ -1,0 +1,15 @@
+namespace: NS3
+name: ObjectGamma
+description: "Object G for example"
+about: "[[documentation.md#object-gamma]]"
+
+attributes:
+  - name: alpha_3
+    type: number
+    example: 3.1415
+    origin:
+      from:
+        - NS4.ObjectNu.nu_1
+        - NS4.ObjectXi.xi_1
+        - NS4.ObjectMu.mu_1
+      formula: "sum value of mu1, nu1 and xi1"

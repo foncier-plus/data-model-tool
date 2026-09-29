@@ -30,7 +30,7 @@ groups:
 }
 
 function load() {
-  return Object.entries(FILES).map(([fileName, text]) => parseObjectFile(fileName, text))
+  return Object.entries(FILES).flatMap(([fileName, text]) => parseObjectFile(fileName, text).entries)
 }
 
 function object(id, namespace, x, y, width = 300, height = 120) {
@@ -67,7 +67,7 @@ describe('computeGroupRects', () => {
     expect(a.x).toBeLessThan(100)
     expect(a.y).toBeLessThan(100)
     expect(a.width).toBeGreaterThan(300)
-    expect(a.height).toBeGreaterThan(380)
+    expect(a.height).toBeGreaterThan(340)
   })
 
   it('nests sub-namespaces inside their parent', () => {

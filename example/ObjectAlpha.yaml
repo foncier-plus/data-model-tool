@@ -1,0 +1,31 @@
+namespace: NS1
+name: ObjectAlpha
+description: "Object A for example"
+about: "[[documentation.md#object-alpha]]"
+
+attributes:
+  - name: alpha_1
+    type: string
+
+groups:
+  - name: "Group of attributes #1"
+    attributes:
+      - name: alpha_3
+        origin:
+          from: [NS1.ObjectBeta.beta_1]
+          formula: "float part of beta_1"
+        type: number
+      - name: alpha_2
+        type: integer
+        origin:
+          from: [NS1.ObjectBeta.beta_1]
+          formula: integer part of beta_1
+
+  - name: "Group of attributes #2"
+    attributes:
+      - name: alpha_4
+        type: string
+        example: "jello"
+        origin:
+          from: [NS2.ObjectDelta.delta_1]
+          formula: "stringification of float on 2 floating digits 0.00"

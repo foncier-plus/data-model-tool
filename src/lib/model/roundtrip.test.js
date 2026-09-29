@@ -28,8 +28,10 @@ groups:
         type: string
 `
 
-const load = (text = SOURCE, fileName = 'client.yaml') =>
-  parseObjectFile(fileName, text)
+const load = (text = SOURCE, fileName = 'client.yaml') => {
+  const parsed = parseObjectFile(fileName, text)
+  return { ...parsed.entries[0], docs: parsed.docs }
+}
 
 describe('yaml round trip', () => {
   it('parses the model and reads the attribute comment', () => {
@@ -48,15 +50,15 @@ describe('yaml round trip', () => {
     expect(output).toContain('Changed description')
   })
 
-  it('marks an attribute optional and removes the flag when mandatory again', () => {
+  it('marks an attribute optional via presence and removes it when mandatory again', () => {
     const { doc } = load()
     setAttributeField(doc, null, 0, 'optional', true)
     const output = serializeObject(doc)
-    expect(output).toContain('optional: true')
+    expect(output).toContain('presence: optional')
     expect(load(output).model.attributes[0].optional).toBe(true)
 
     setAttributeField(doc, null, 0, 'optional', false)
-    expect(serializeObject(doc)).not.toContain('optional')
+    expect(serializeObject(doc)).not.toContain('presence')
   })
 
   it('writes and reads back an example', () => {

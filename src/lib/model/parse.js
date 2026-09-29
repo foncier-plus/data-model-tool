@@ -30,11 +30,15 @@ function attributeFromNode(node) {
   if (!node || typeof node.get !== 'function') return null
   const name = asString(node.get('name'))
   if (!name) return null
+  const presence = asString(node.get('presence')).trim().toLowerCase()
+  const optional = presence ? presence === 'optional' : node.get('optional') === true
   const attribute = {
     name,
-    optional: node.get('optional') === true,
+    presence: optional ? 'optional' : 'mandatory',
+    optional,
     example: asText(node.get('example')),
     description: asString(node.get('description')),
+    about: asString(node.get('about')),
     comment: readComment(node),
   }
   const type = asString(node.get('type'))
@@ -66,8 +70,10 @@ export function toRawObject(doc) {
 
   const object = {
     name: asString(root.get('name')),
+    namespace: asString(root.get('namespace')),
     type: asString(root.get('type')),
     description: asString(root.get('description')),
+    about: asString(root.get('about')),
     comment: readComment(root.items?.[0]?.key),
     attributes: [],
     groups: [],
@@ -88,12 +94,93 @@ export function deriveModel(doc) {
   return { raw, model, errors }
 }
 
-export function parseObjectFile(fileName, text) {
-  const doc = YAML.parseDocument(text ?? '', { keepSourceTokens: false })
+export function normalizeNamespace(namespace) {
+  return String(namespace ?? '')
+    .split('.')
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .join('.')
+}
+
+export function entryIdentity(namespace, name) {
+  const prefix = normalizeNamespace(namespace)
+  const label = String(name ?? '').trim()
+  return prefix ? `${prefix}.${label}` : label
+}
+
+function lineOf(text, offset) {
+  const limit = Math.min(offset, text.length)
+  let line = 1
+  for (let index = 0; index < limit; index += 1) {
+    if (text.charCodeAt(index) === 10) line += 1
+  }
+  return line
+}
+
+export function collectLines(doc, text) {
+  const root = doc.contents
+  const lines = { object: 1, groups: {}, attributes: {}, groupAttributes: {} }
+  if (!root || typeof root.get !== 'function') return lines
+  if (Array.isArray(root.range)) lines.object = lineOf(text, root.range[0])
+
+  const attributes = root.get('attributes')
+  if (Array.isArray(attributes?.items)) {
+    for (const item of attributes.items) {
+      const name = item?.get?.('name')
+      if (name !== undefined && Array.isArray(item?.range)) {
+        lines.attributes[String(name)] = lineOf(text, item.range[0])
+      }
+    }
+  }
+
+  const groups = root.get('groups')
+  if (Array.isArray(groups?.items)) {
+    for (const group of groups.items) {
+      const groupName = group?.get?.('name')
+      if (groupName !== undefined && Array.isArray(group?.range)) {
+        lines.groups[String(groupName)] = lineOf(text, group.range[0])
+      }
+      const groupAttributes = group?.get?.('attributes')
+      if (groupName !== undefined && Array.isArray(groupAttributes?.items)) {
+        for (const item of groupAttributes.items) {
+          const name = item?.get?.('name')
+          if (name !== undefined && Array.isArray(item?.range)) {
+            lines.groupAttributes[`${groupName}.${name}`] = lineOf(text, item.range[0])
+          }
+        }
+      }
+    }
+  }
+
+  return lines
+}
+
+export function parseObjectDocument(fileName, doc, docIndex) {
   normalizeComments(doc)
-
-  const parseErrors = doc.errors.map((error) => error.message)
   const { raw, model, errors } = deriveModel(doc)
+  const namespace = normalizeNamespace(raw.namespace)
+  const name = model?.name ?? raw.name ?? ''
+  const parseErrors = doc.errors.map((error) => error.message)
+  return {
+    fileName,
+    docIndex,
+    doc,
+    raw,
+    model,
+    namespace: namespace || null,
+    qualifiedName: entryIdentity(namespace, name),
+    errors: [...parseErrors, ...errors],
+  }
+}
 
-  return { fileName, doc, raw, model, errors: [...parseErrors, ...errors] }
+export function parseObjectFile(fileName, text) {
+  const source = text ?? ''
+  const docs = YAML.parseAllDocuments(source, { keepSourceTokens: false })
+  const list = docs.length > 0 ? docs : [YAML.parseDocument('')]
+  const entries = list.map((doc, docIndex) => {
+    const entry = parseObjectDocument(fileName, doc, docIndex)
+    entry.lines = collectLines(doc, source)
+    return entry
+  })
+  return { fileName, docs: list, entries }
 }

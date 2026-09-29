@@ -57,7 +57,7 @@ function buildItems(selection, project) {
 
 export function Breadcrumb({ selection }) {
   const select = useProjectStore((state) => state.select)
-  const deleteObject = useProjectStore((state) => state.deleteObject)
+  const deleteEntry = useProjectStore((state) => state.deleteEntry)
   const entries = useProjectStore((state) => state.entries)
   const entry = selection
     ? entries.find(
@@ -70,15 +70,15 @@ export function Breadcrumb({ selection }) {
   if (items.length === 0) {
     return (
       <div className="border-b bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
-        No selection
+        Aucune sélection
       </div>
     )
   }
 
   const handleDelete = () => {
     if (!entry) return
-    if (window.confirm(`Delete object "${entry.model?.name}" and its file ${entry.fileName}?`)) {
-      deleteObject(entry.fileName)
+    if (window.confirm(`Supprimer l'objet « ${entry.model?.name} » ?`)) {
+      deleteEntry(selection.objectName)
     }
   }
 

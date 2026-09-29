@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import { attributeRef, groupRef, resolveRef } from '@/lib/model/refs'
 import { useProjectStore } from '@/lib/store/useProjectStore'
+import { AboutLink } from '@/components/wiki/RichText'
 import { typeStyle, withAlpha } from '@/lib/colors'
 import { cn } from '@/lib/utils'
 
@@ -143,7 +144,11 @@ function Row({
 
 export function EntityNode({ data }) {
   const select = useProjectStore((state) => state.select)
+  const revealSelection = useProjectStore((state) => state.revealSelection)
+  const openFile = useProjectStore((state) => state.openFile)
   const [expanded, setExpanded] = useState(() => new Set())
+  const [manualCollapsed, setManualCollapsed] = useState(() => new Set())
+  const [manualRootCollapsed, setManualRootCollapsed] = useState(false)
   const [rootCollapsed, setRootCollapsed] = useState(true)
   const [lastReveal, setLastReveal] = useState('')
   const [autoGroups, setAutoGroups] = useState(() => new Set())
@@ -154,6 +159,7 @@ export function EntityNode({ data }) {
     namespace,
     index,
     revealRefs,
+    linkedRefs,
     color,
     highlighted,
     dimmed,
@@ -163,15 +169,24 @@ export function EntityNode({ data }) {
     downstreamRefs,
     hasHighlight,
     autoCollapse = true,
-    editMode = false,
+    attributeRelations = false,
   } = data
 
   const objectSelected = highlighted || selectedRef === qualifiedName
   const isInput = model.type === 'input'
   const isOutput = model.type === 'output'
   const isTerminal = isInput || isOutput
-  const rootIsCollapsed = rootCollapsed
   const rootAttributes = model.attributes ?? []
+  const rootLinked =
+    attributeRelations &&
+    rootAttributes.some((attribute) =>
+      linkedRefs?.has(attributeRef(qualifiedName, null, attribute.name)),
+    )
+  const rootIsCollapsed = rootLinked
+    ? false
+    : autoCollapse
+      ? rootCollapsed
+      : manualRootCollapsed
   const totalAttributes =
     rootAttributes.length +
     (model.groups ?? []).reduce((total, group) => total + (group.attributes?.length ?? 0), 0)
@@ -179,7 +194,7 @@ export function EntityNode({ data }) {
   const revealKey = revealRefs?.size ? [...revealRefs].sort().join('|') : ''
   if (revealKey !== lastReveal) {
     setLastReveal(revealKey)
-    if (!highlighted && autoCollapse && !editMode) {
+    if (!highlighted && autoCollapse && !attributeRelations) {
       if (!revealKey) {
         setExpanded((previous) => {
           const next = new Set(previous)
@@ -225,13 +240,16 @@ export function EntityNode({ data }) {
     }
   }
 
-  const toggleGroup = (key) =>
-    setExpanded((previous) => {
+  const toggleGroup = (key) => {
+    const update = (previous) => {
       const next = new Set(previous)
       if (next.has(key)) next.delete(key)
       else next.add(key)
       return next
-    })
+    }
+    if (autoCollapse) setExpanded(update)
+    else setManualCollapsed(update)
+  }
 
   const rowProps = (ref, label, type, optional, example, derived, warning, onClick) => ({
     ref,
@@ -253,6 +271,35 @@ export function EntityNode({ data }) {
     onClick,
   })
 
+  const showRootGroup = data.rootGroup ?? false
+  const activate = data.revealOnClick ? revealSelection : select
+
+  const renderRootRow = (attribute) => {
+    const ref = attributeRef(qualifiedName, null, attribute.name)
+    return (
+      <Row
+        key={ref}
+        {...rowProps(
+          ref,
+          attribute.name,
+          attribute.type,
+          attribute.optional,
+          attribute.example,
+          Boolean(attribute.origin),
+          isUnresolved(attribute.origin, index, namespace),
+          () =>
+            activate({
+              kind: 'attribute',
+              objectName: qualifiedName,
+              groupName: null,
+              attributeName: attribute.name,
+              ref,
+            }),
+        )}
+      />
+    )
+  }
+
   return (
     <div
       className={cn(
@@ -261,7 +308,13 @@ export function EntityNode({ data }) {
         dimmed && !objectSelected && 'opacity-30',
       )}
       style={{
-        borderColor: isTerminal ? '#3f3f46' : objectSelected ? color : withAlpha(color, 0.55),
+        borderColor: data.conflict
+          ? '#dc2626'
+          : isTerminal
+            ? '#3f3f46'
+            : objectSelected
+              ? color
+              : withAlpha(color, 0.55),
       }}
     >
       {edgeMode === 'aggregated' && !isInput ? (
@@ -273,37 +326,47 @@ export function EntityNode({ data }) {
         />
       ) : null}
 
-      <button
-        type="button"
+      <div
         className={cn(
-          'flex h-8 w-full items-center gap-2 px-2 text-left text-xs font-semibold hover:brightness-95',
+          'flex h-8 w-full items-center gap-2 px-2 text-xs font-semibold',
           isTerminal && 'text-white',
         )}
         style={{
           background: isTerminal ? '#3f3f46' : withAlpha(color, objectSelected ? 0.42 : 0.15),
           borderBottom: `1px solid ${isTerminal ? '#27272a' : withAlpha(color, 0.4)}`,
         }}
-        onClick={(event) => {
-          event.stopPropagation()
-          select({
-            kind: 'object',
-            objectName: qualifiedName,
-            groupName: null,
-            attributeName: null,
-            ref: qualifiedName,
-          })
-        }}
       >
-        <GripVertical className="size-3.5 shrink-0 text-muted-foreground" />
-        <span className="truncate">{model.name}</span>
-        <span className="flex-1" />
+        <button
+          type="button"
+          className="flex min-w-0 flex-1 items-center gap-2 text-left hover:brightness-95"
+          onClick={(event) => {
+            event.stopPropagation()
+            select({
+              kind: 'object',
+              objectName: qualifiedName,
+              groupName: null,
+              attributeName: null,
+              ref: qualifiedName,
+            })
+          }}
+        >
+          <GripVertical className="size-3.5 shrink-0 text-muted-foreground" />
+          <span className="truncate">{model.name}</span>
+        </button>
+        {model.about ? (
+          <AboutLink
+            about={model.about}
+            yamlFileName={data.fileName}
+            className={isTerminal ? 'text-white hover:bg-white/20' : undefined}
+          />
+        ) : null}
         <span
           className="rounded-full px-1.5 py-0.5 text-[10px] font-bold text-white"
           style={{ background: color }}
         >
           {totalAttributes}
         </span>
-      </button>
+      </div>
 
       {model.description ? (
         <div className="px-2 pt-1 text-[10px] leading-4 break-words text-muted-foreground">
@@ -311,51 +374,56 @@ export function EntityNode({ data }) {
         </div>
       ) : null}
 
+      {data.conflict && data.files?.length > 0 ? (
+        <div className="flex flex-col gap-0.5 border-b border-red-300 bg-red-50 px-2 py-1 text-[10px] text-red-700 dark:border-red-800 dark:bg-red-950/40 dark:text-red-300">
+          <span className="flex items-center gap-1 font-semibold">
+            <AlertTriangle className="size-3" />
+            Conflit : objet déclaré plusieurs fois
+          </span>
+          {data.files.map((file) => (
+            <button
+              key={file}
+              type="button"
+              title={`Ouvrir ${file}`}
+              className="truncate text-left underline underline-offset-2"
+              onClick={(event) => {
+                event.stopPropagation()
+                openFile(file)
+              }}
+            >
+              {file}
+            </button>
+          ))}
+        </div>
+      ) : null}
+
       <div className="flex flex-col gap-1 p-1.5">
         {rootAttributes.length > 0 ? (
-          <div
-            className="overflow-hidden rounded border border-dashed"
-            style={{ borderColor: withAlpha(color, 0.4) }}
-          >
-            <div className="flex h-6 items-center gap-1 px-1 text-[10px] text-muted-foreground">
-              <Chevron
-                collapsed={rootIsCollapsed}
-                onClick={() => setRootCollapsed((value) => !value)}
-                label="root attributes"
-              />
-              <span className="flex-1" />
-              <span className="pr-1">{rootAttributes.length}</span>
-            </div>
-            {rootIsCollapsed ? null : (
-              <div className="flex flex-col gap-0.5 p-1">
-                {rootAttributes.map((attribute) => {
-                  const ref = attributeRef(qualifiedName, null, attribute.name)
-                  return (
-                    <Row
-                      key={ref}
-                      {...rowProps(
-                        ref,
-                        attribute.name,
-                        attribute.type,
-                        attribute.optional,
-                        attribute.example,
-                        Boolean(attribute.origin),
-                        isUnresolved(attribute.origin, index, namespace),
-                        () =>
-                          select({
-                            kind: 'attribute',
-                            objectName: qualifiedName,
-                            groupName: null,
-                            attributeName: attribute.name,
-                            ref,
-                          }),
-                      )}
-                    />
-                  )
-                })}
+          showRootGroup ? (
+            <div
+              className="overflow-hidden rounded border border-dashed"
+              style={{ borderColor: withAlpha(color, 0.4) }}
+            >
+              <div className="flex h-6 items-center gap-1 px-1 text-[10px] text-muted-foreground">
+                <Chevron
+                  collapsed={rootIsCollapsed}
+                  onClick={() =>
+                    autoCollapse
+                      ? setRootCollapsed((value) => !value)
+                      : setManualRootCollapsed((value) => !value)
+                  }
+                  label="root attributes"
+                />
+                <span className="flex-1" />
+                <span className="pr-1">{rootAttributes.length}</span>
               </div>
-            )}
-          </div>
+              {rootIsCollapsed ? null : (
+                <div className="flex flex-col gap-0.5 p-1">{rootAttributes.map(renderRootRow)}</div>
+              )}
+            </div>
+          ) : (
+            <div className="flex flex-col gap-0.5">{rootAttributes.map(renderRootRow)}</div>
+          )
         ) : null}
 
         {(model.groups ?? []).map((group) => {
@@ -363,7 +431,16 @@ export function EntityNode({ data }) {
           const groupActive = selectedRef === ref
           const groupUpstream = upstreamRefs?.has(ref) ?? false
           const groupDownstream = downstreamRefs?.has(ref) ?? false
-          const isCollapsed = !expanded.has(ref)
+          const groupLinked =
+            attributeRelations &&
+            (group.attributes ?? []).some((attribute) =>
+              linkedRefs?.has(attributeRef(qualifiedName, group.name, attribute.name)),
+            )
+          const isCollapsed = groupLinked
+            ? false
+            : autoCollapse
+              ? !expanded.has(ref)
+              : manualCollapsed.has(ref)
           return (
             <div
               key={ref}
@@ -395,7 +472,7 @@ export function EntityNode({ data }) {
                   className="flex h-6 min-w-0 flex-1 items-center gap-1.5 pr-1 text-left text-[11px] font-medium hover:brightness-95"
                   onClick={(event) => {
                     event.stopPropagation()
-                    select({
+                    activate({
                       kind: 'group',
                       objectName: qualifiedName,
                       groupName: group.name,
@@ -435,7 +512,7 @@ export function EntityNode({ data }) {
                           Boolean(attribute.origin),
                           isUnresolved(attribute.origin, index, namespace),
                           () =>
-                            select({
+                            activate({
                               kind: 'attribute',
                               objectName: qualifiedName,
                               groupName: group.name,

@@ -1,0 +1,12 @@
+namespace: NS1
+name: ObjectBeta
+description: "Object B for example"
+about: "[[documentation.md#object-beta]]"
+
+attributes:
+  - name: beta_1
+    type: number
+    example: 3.1415
+    origin:
+      formula: "sum"
+      from: [NS2.ObjectDelta.delta_1, NS3.ObjectGamma.alpha_3]

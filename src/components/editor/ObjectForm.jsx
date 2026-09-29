@@ -3,9 +3,10 @@ import { Check, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Separator } from '@/components/ui/separator'
+import { RichText } from '@/components/wiki/RichText'
 import { useProjectStore } from '@/lib/store/useProjectStore'
 import { groupRef } from '@/lib/model/refs'
-import { BlurInput, FieldRow, TextAreaField } from './fields'
+import { BlurInput, FieldRow, TextAreaField, TextField } from './fields'
 
 export function ObjectForm({ entry, model }) {
   const setObjectField = useProjectStore((state) => state.setObjectField)
@@ -16,44 +17,63 @@ export function ObjectForm({ entry, model }) {
 
   const [draft, setDraft] = useState('')
 
-  const fileName = entry.fileName
-  const objectName = entry.qualifiedName ?? model.name
+  const entryId = entry.qualifiedName
   const groups = model.groups ?? []
 
   const commitGroup = () => {
     const value = draft.trim()
     if (!value) return
-    addGroup(fileName, value)
+    addGroup(entryId, value)
     setDraft('')
   }
 
   const handleDeleteGroup = (index) => {
-    if (window.confirm(`Delete group "${groups[index].name}" and its attributes?`)) {
-      removeGroup(fileName, index)
+    if (window.confirm(`Supprimer le groupe « ${groups[index].name} » et ses attributs ?`)) {
+      removeGroup(entryId, index)
     }
   }
 
   return (
     <div className="flex flex-col gap-4">
-      <FieldRow label="Name">
-        <BlurInput value={model.name} onCommit={(next) => renameObject(fileName, next)} />
+      <FieldRow label="Namespace">
+        <BlurInput
+          allowEmpty
+          value={model.namespace}
+          placeholder="(racine)"
+          onCommit={(next) => setObjectField(entryId, 'namespace', next)}
+        />
+      </FieldRow>
+      <FieldRow label="Nom">
+        <BlurInput value={model.name} onCommit={(next) => renameObject(entryId, next)} />
       </FieldRow>
       <TextAreaField
         label="Description"
         value={model.description}
-        onChange={(value) => setObjectField(fileName, 'description', value)}
+        onChange={(value) => setObjectField(entryId, 'description', value)}
       />
+
+      <div className="flex flex-col gap-1.5">
+        <TextField
+          label="Documentation (about)"
+          value={model.about}
+          placeholder="[[guide.md#section]]"
+          onChange={(value) => setObjectField(entryId, 'about', value)}
+        />
+        <RichText value={model.about} yamlFileName={entry.fileName} />
+      </div>
 
       <Separator />
 
       <section className="flex flex-col gap-2">
-        <span className="text-xs font-medium text-muted-foreground">Groups ({groups.length})</span>
+        <span className="text-xs font-medium text-muted-foreground">
+          Groupes ({groups.length})
+        </span>
 
-        <div className="flex items-center gap-2 rounded-md border px-3 py-1 bg-black/3">
+        <div className="flex items-center gap-2 rounded-md border bg-black/3 px-3 py-1">
           <Input
             value={draft}
-            placeholder="new group name"
-            className="h-6 bg-transparent border-0 px-0 shadow-none focus-visible:ring-0"
+            placeholder="nouveau groupe"
+            className="h-6 border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
             onChange={(event) => setDraft(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === 'Enter') {
@@ -74,21 +94,24 @@ export function ObjectForm({ entry, model }) {
         </div>
 
         {groups.length === 0 ? (
-          <p className="text-xs text-muted-foreground">No group.</p>
+          <p className="text-xs text-muted-foreground">Aucun groupe.</p>
         ) : (
           <div className="flex flex-col gap-1">
             {groups.map((group, index) => {
-              const ref = groupRef(objectName, group.name)
+              const ref = groupRef(entryId, group.name)
               const count = group.attributes?.length ?? 0
               return (
-                <div key={ref} className="flex font-mono items-center gap-2 rounded-md border px-3 py-1">
+                <div
+                  key={ref}
+                  className="flex items-center gap-2 rounded-md border px-3 py-1 font-mono"
+                >
                   <button
                     type="button"
                     className="min-w-0 flex-1 truncate text-left text-xs hover:underline"
                     onClick={() =>
                       select({
                         kind: 'group',
-                        objectName,
+                        objectName: entryId,
                         groupName: group.name,
                         attributeName: null,
                         ref,

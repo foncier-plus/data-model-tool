@@ -3,6 +3,7 @@ import { parseObjectFile } from '@/lib/model/parse'
 import {
   attributeRef,
   buildIndex,
+  findObjectConflicts,
   groupRef,
   objectElements,
   resolveRef,
@@ -10,18 +11,11 @@ import {
 } from '@/lib/model/refs'
 
 function load(files) {
-  return Object.entries(files).map(([fileName, text]) => parseObjectFile(fileName, text))
+  return Object.entries(files).flatMap(([fileName, text]) => parseObjectFile(fileName, text).entries)
 }
 
-function entry(fileName, text) {
-  const parsed = parseObjectFile(fileName, text)
-  const filePath = fileName.replace(/\.ya?ml$/, '')
-  const slash = filePath.lastIndexOf('/')
-  return {
-    ...parsed,
-    qualifiedName: filePath.replace(/\//g, '.'),
-    namespace: slash === -1 ? null : filePath.slice(0, slash).replace(/\//g, '.'),
-  }
+function entry(_fileName, text) {
+  return parseObjectFile('file.yaml', text).entries[0]
 }
 
 const TIERS = `name: tiers
@@ -108,21 +102,11 @@ attributes:
   })
 
   it('resolves a bare reference inside the file namespace', () => {
-    const entry = (fileName, text) => {
-      const parsed = parseObjectFile(fileName, text)
-      const filePath = fileName.replace(/\.yaml$/, '')
-      const slash = filePath.lastIndexOf('/')
-      return {
-        ...parsed,
-        qualifiedName: filePath.replace(/\//g, '.'),
-        namespace: slash === -1 ? null : filePath.slice(0, slash).replace(/\//g, '.'),
-      }
-    }
     const entries = [
-      entry('sales/tiers.yaml', 'name: tiers\nattributes:\n  - name: id\n    type: string\n'),
+      entry('sales/tiers.yaml', 'namespace: sales\nname: tiers\nattributes:\n  - name: id\n    type: string\n'),
       entry(
         'sales/client.yaml',
-        'name: client\nattributes:\n  - name: id_client\n    origin:\n      from: [tiers.id]\n      formula: tiers.id\n',
+        'namespace: sales\nname: client\nattributes:\n  - name: id_client\n    origin:\n      from: [tiers.id]\n      formula: tiers.id\n',
       ),
     ]
     expect(validateReferences(entries)).toEqual([])
@@ -146,10 +130,10 @@ attributes:
 
   it('does not resolve references across projects', () => {
     const entries = [
-      entry('sales/tiers.yaml', 'name: tiers\nattributes:\n  - name: id\n    type: string\n'),
+      entry('sales/tiers.yaml', 'namespace: sales\nname: tiers\nattributes:\n  - name: id\n    type: string\n'),
       entry(
         'crm/client.yaml',
-        'name: client\nattributes:\n  - name: id\n    origin:\n      from: [tiers.id]\n      formula: tiers.id\n',
+        'namespace: crm\nname: client\nattributes:\n  - name: id\n    origin:\n      from: [tiers.id]\n      formula: tiers.id\n',
       ),
     ]
     const issues = validateReferences(entries)
@@ -162,25 +146,50 @@ attributes:
     const entries = [
       entry(
         'Mon Projet/tiers.yaml',
-        'name: tiers\nattributes:\n  - name: id\n    type: string\n',
+        'namespace: Mon Projet\nname: tiers\nattributes:\n  - name: id\n    type: string\n',
       ),
       entry(
         'Mon Projet/client.yaml',
-        'name: client\nattributes:\n  - name: id\n    origin:\n      from: [tiers.id]\n      formula: tiers.id\n',
+        'namespace: Mon Projet\nname: client\nattributes:\n  - name: id\n    origin:\n      from: [tiers.id]\n      formula: tiers.id\n',
       ),
     ]
     expect(validateReferences(entries)).toEqual([])
+  })
+
+  it('resolves a fully-qualified reference to another project', () => {
+    const entries = [
+      entry(
+        'ign.yaml',
+        'namespace: IGN.BDTOPO\nname: batiment\nattributes:\n  - name: hauteur\n    type: number\n',
+      ),
+      entry(
+        'azae.yaml',
+        'namespace: AZAE\nname: bati\nattributes:\n  - name: hauteur\n    type: number\n    origin:\n      from: [IGN.BDTOPO.batiment.hauteur]\n      formula: hauteur\n',
+      ),
+    ]
+    expect(validateReferences(entries)).toEqual([])
+  })
+
+  it('reports objects declared in several files as conflicts', () => {
+    const entries = [
+      ...parseObjectFile('a.yaml', 'namespace: AZAE\nname: bati\nattributes:\n  - name: x\n').entries,
+      ...parseObjectFile('b.yaml', 'namespace: AZAE\nname: bati\nattributes:\n  - name: y\n').entries,
+    ]
+    const conflicts = findObjectConflicts(entries)
+    expect([...conflicts.keys()]).toEqual(['AZAE.bati'])
+    expect(conflicts.get('AZAE.bati').sort()).toEqual(['a.yaml', 'b.yaml'])
+    expect(validateReferences(entries).some((issue) => issue.code === 'conflict')).toBe(true)
   })
 
   it('resolves a project-relative reference to another sub-namespace', () => {
     const entries = [
       entry(
         'proj/ref/tiers.yaml',
-        'name: tiers\nattributes:\n  - name: id\n    type: string\n',
+        'namespace: proj.ref\nname: tiers\nattributes:\n  - name: id\n    type: string\n',
       ),
       entry(
         'proj/app/client.yaml',
-        'name: client\nattributes:\n  - name: id\n    origin:\n      from: [ref.tiers.id]\n      formula: ref.tiers.id\n',
+        'namespace: proj.app\nname: client\nattributes:\n  - name: id\n    origin:\n      from: [ref.tiers.id]\n      formula: ref.tiers.id\n',
       ),
     ]
     expect(validateReferences(entries)).toEqual([])

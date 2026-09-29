@@ -24,7 +24,9 @@ import {
   namespacePrefixes,
 } from '@/lib/model/hierarchy'
 import { colorFor } from '@/lib/colors'
+import { useLocalStorageState } from '@/lib/useLocalStorageState'
 import { useProjectStore } from '@/lib/store/useProjectStore'
+import { DependencyNode } from './DependencyNode'
 import { EntityNode } from './EntityNode'
 import { FlatEdge } from './FlatEdge'
 import { GraphSettings } from './GraphSettings'
@@ -33,15 +35,19 @@ import {
   COLLAPSED_GROUP_HEIGHT,
   COLLAPSED_GROUP_WIDTH,
   COLUMN_GAP,
+  NAMESPACE_PADDING,
+  NS_HEADER_HEIGHT,
   NODE_WIDTH,
-  computeGroupRects,
   isUnderNamespace,
   layoutGraph,
   objectSize,
 } from '@/lib/layout'
 
-const nodeTypes = { entity: EntityNode, namespace: NamespaceNode }
+const nodeTypes = { entity: EntityNode, namespace: NamespaceNode, dependency: DependencyNode }
 const edgeTypes = { flat: FlatEdge }
+
+const DEPENDENCY_WIDTH = 180
+const DEPENDENCY_HEIGHT = 36
 
 const GRAPH_BACKGROUND = {
   gap: 10,
@@ -49,12 +55,7 @@ const GRAPH_BACKGROUND = {
   bgColor: 'var(--graph-background)',
 }
 
-function groupLabel(fullName, project) {
-  if (project && fullName.startsWith(`${project}.`)) return fullName.slice(project.length + 1)
-  return fullName
-}
-
-function GraphCanvas({ entries, selection, onSelect, selectedObjects }) {
+function GraphCanvas({ entries, selection, onSelect, selectedObjects, scope = 'all', fileName = null }) {
   const { fitView } = useReactFlow()
   const updateNodeInternals = useUpdateNodeInternals()
   const linkAttributes = useProjectStore((state) => state.linkAttributes)
@@ -63,32 +64,38 @@ function GraphCanvas({ entries, selection, onSelect, selectedObjects }) {
   const fullObjectGraph = useMemo(() => buildObjectGraph(entries, index), [entries, index])
   const attributeGraph = useMemo(() => buildAttributeEdges(entries, index), [entries, index])
 
+  const internalIds = useMemo(() => {
+    if (scope !== 'file' || !fileName) return null
+    return new Set(
+      entries.filter((entry) => entry.fileName === fileName).map((entry) => entry.qualifiedName),
+    )
+  }, [scope, fileName, entries])
+
   const objectIds = useMemo(
-    () => filterObjectIds(fullObjectGraph, selectedObjects),
-    [fullObjectGraph, selectedObjects],
+    () => filterObjectIds(fullObjectGraph, internalIds ?? selectedObjects),
+    [fullObjectGraph, selectedObjects, internalIds],
   )
 
   const [collapsed, setCollapsed] = useState(() => new Set())
-  const [autoCollapse, setAutoCollapse] = useState(true)
-  const [editMode, setEditMode] = useState(false)
+  const [graphSettings, setGraphSettings] = useLocalStorageState('data-flow.graph-settings', {
+    rootGroup: false,
+    autoCollapse: true,
+    attributeRelations: false,
+  })
+  const { rootGroup, autoCollapse, attributeRelations } = graphSettings
+  const updateSettings = (patch) => setGraphSettings((previous) => ({ ...previous, ...patch }))
   const visible = useMemo(
     () => buildVisibleGraph(fullObjectGraph, collapsed, objectIds),
     [fullObjectGraph, collapsed, objectIds],
   )
-
-  const project = useMemo(() => {
-    for (const node of visible.objectNodes) {
-      if (node.namespace) return node.namespace.split('.')[0]
-    }
-    return null
-  }, [visible])
 
   const contentKey = useMemo(
     () => visible.objectNodes.map((object) => `${object.id}:${JSON.stringify(object.model)}`).join('|'),
     [visible],
   )
 
-  const edgeMode = editMode || selection?.kind === 'attribute' ? 'attribute' : 'aggregated'
+  const edgeMode =
+    attributeRelations || selection?.kind === 'attribute' ? 'attribute' : 'aggregated'
 
   const activeEdges = useMemo(() => {
     if (edgeMode === 'attribute') {
@@ -143,6 +150,21 @@ function GraphCanvas({ entries, selection, onSelect, selectedObjects }) {
     }
     return set
   }, [selection, attributeGraph])
+
+  // When attribute relations are shown, every attribute involved in a link
+  // is revealed so the containing groups expand automatically.
+  const linkedRefs = useMemo(() => {
+    const set = new Set()
+    if (!attributeRelations) return set
+    for (const edge of attributeGraph.edges) {
+      if (!visible.visibleObjectIds.has(edge.source) || !visible.visibleObjectIds.has(edge.target)) {
+        continue
+      }
+      set.add(edge.sourceRef)
+      set.add(edge.targetRef)
+    }
+    return set
+  }, [attributeRelations, attributeGraph, visible])
 
   const relatedObjects = useMemo(() => {
     const set = new Set()
@@ -222,32 +244,98 @@ function GraphCanvas({ entries, selection, onSelect, selectedObjects }) {
   const sizes = useMemo(() => {
     const map = new Map()
     for (const node of nodes) {
-      if (node.type !== 'entity') continue
-      const size = objectSize(node.data.model)
-      map.set(node.id, {
-        width: node.measured?.width ?? size.width,
-        height: node.measured?.height ?? size.height,
-      })
+      if (node.type === 'entity') {
+        const size = objectSize(node.data.model)
+        map.set(node.id, {
+          width: node.measured?.width ?? size.width,
+          height: node.measured?.height ?? size.height,
+        })
+      } else if (node.type === 'dependency') {
+        map.set(node.id, { width: DEPENDENCY_WIDTH, height: DEPENDENCY_HEIGHT })
+      }
     }
     return map
   }, [nodes])
 
+  const [layoutGroups, setLayoutGroups] = useState(() => new Map())
+  const [layoutPositions, setLayoutPositions] = useState(() => new Map())
+
   const groupRects = useMemo(() => {
-    const objects = nodes
-      .filter((node) => node.type === 'entity')
-      .map((node) => {
-        const size = objectSize(node.data.model)
-        return {
-          id: node.id,
-          namespace: node.data.namespace ?? null,
-          x: node.position.x,
-          y: node.position.y,
-          width: node.measured?.width ?? size.width,
-          height: node.measured?.height ?? size.height,
-        }
-      })
-    return computeGroupRects(objects)
-  }, [nodes])
+    const result = new Map()
+    for (const [name, rect] of layoutGroups) result.set(name, { ...rect })
+
+    const stats = new Map()
+    const accumulate = (namespace, dx, dy, x, y, width, height) => {
+      if (!namespace) return
+      for (const prefix of namespacePrefixes(namespace)) {
+        const entry =
+          stats.get(prefix) ?? {
+            dx: 0,
+            dy: 0,
+            count: 0,
+            minX: Infinity,
+            minY: Infinity,
+            maxX: -Infinity,
+            maxY: -Infinity,
+          }
+        entry.dx += dx
+        entry.dy += dy
+        entry.count += 1
+        entry.minX = Math.min(entry.minX, x)
+        entry.minY = Math.min(entry.minY, y)
+        entry.maxX = Math.max(entry.maxX, x + width)
+        entry.maxY = Math.max(entry.maxY, y + height)
+        stats.set(prefix, entry)
+      }
+    }
+
+    for (const node of nodes) {
+      if (node.type !== 'entity' && node.type !== 'dependency') continue
+      const layout = layoutPositions.get(node.id)
+      if (!layout) continue
+      const size =
+        node.type === 'entity'
+          ? objectSize(node.data.model)
+          : { width: DEPENDENCY_WIDTH, height: DEPENDENCY_HEIGHT }
+      accumulate(
+        node.data.namespace ?? null,
+        node.position.x - layout.x,
+        node.position.y - layout.y,
+        node.position.x,
+        node.position.y,
+        node.measured?.width ?? size.width,
+        node.measured?.height ?? size.height,
+      )
+    }
+
+    for (const node of nodes) {
+      if (node.type === 'namespace' && node.data.collapsed && node.data.namespace) {
+        accumulate(
+          node.data.namespace,
+          0,
+          0,
+          node.position.x,
+          node.position.y,
+          COLLAPSED_GROUP_WIDTH,
+          COLLAPSED_GROUP_HEIGHT,
+        )
+      }
+    }
+
+    for (const [name, rect] of layoutGroups) {
+      const entry = stats.get(name)
+      if (!entry || entry.count === 0) continue
+      const x = rect.x + entry.dx / entry.count
+      const y = rect.y + entry.dy / entry.count
+      const minX = Math.min(x, entry.minX - NAMESPACE_PADDING)
+      const minY = Math.min(y, entry.minY - NAMESPACE_PADDING - NS_HEADER_HEIGHT)
+      const maxX = Math.max(x + rect.width, entry.maxX + NAMESPACE_PADDING)
+      const maxY = Math.max(y + rect.height, entry.maxY + NAMESPACE_PADDING)
+      result.set(name, { fullName: name, x: minX, y: minY, width: maxX - minX, height: maxY - minY })
+    }
+
+    return result
+  }, [nodes, layoutGroups, layoutPositions])
 
   const toggleGroup = useCallback((namespace) => {
     setCollapsed((previous) => {
@@ -337,9 +425,13 @@ function GraphCanvas({ entries, selection, onSelect, selectedObjects }) {
         sizes,
         columnGap: COLUMN_GAP,
       })
+      const nextPositions = new Map()
       for (const [id, position] of layout.positions) {
         positionsRef.current.set(id, position)
+        nextPositions.set(id, position)
       }
+      setLayoutPositions(nextPositions)
+      setLayoutGroups(layout.groups)
     }
     for (const unit of units) {
       if (!positionsRef.current.has(unit.id)) {
@@ -368,7 +460,7 @@ function GraphCanvas({ entries, selection, onSelect, selectedObjects }) {
         return `${namespace}:${position.x}:${position.y}`
       })
       .join('|')
-    const signature = `${edgeMode}~${autoCollapse}~${revealKey}~${countsKey}~${objectKey}~${groupKey}~${collapsedKey}~${contentKey}`
+    const signature = `${edgeMode}~${scope}~${autoCollapse}~${rootGroup}~${attributeRelations}~${revealKey}~${countsKey}~${objectKey}~${groupKey}~${collapsedKey}~${contentKey}`
 
     if (appliedRef.current.signature !== signature) {
       appliedRef.current.signature = signature
@@ -377,7 +469,7 @@ function GraphCanvas({ entries, selection, onSelect, selectedObjects }) {
         const specs = []
 
         for (const [fullName, rect] of groupRects) {
-          if (fullName === project) continue
+          if (visible.collapsedGroupIds.has(fullName)) continue
           const id = `ns:${fullName}`
           const existing = byId.get(id)
           specs.push({
@@ -386,11 +478,11 @@ function GraphCanvas({ entries, selection, onSelect, selectedObjects }) {
             type: 'namespace',
             selectable: false,
             position: { x: rect.x, y: rect.y },
-            style: { width: rect.width, height: rect.height },
+            style: { width: rect.width, height: rect.height, pointerEvents: 'none' },
             zIndex: 0,
             data: {
               ...existing?.data,
-              label: groupLabel(fullName, project),
+              label: fullName,
               namespace: fullName,
               collapsed: false,
               count: namespaceCounts.get(fullName) ?? 0,
@@ -409,11 +501,15 @@ function GraphCanvas({ entries, selection, onSelect, selectedObjects }) {
             type: 'namespace',
             selectable: false,
             position: positionsRef.current.get(id),
-            style: { width: COLLAPSED_GROUP_WIDTH, height: COLLAPSED_GROUP_HEIGHT },
+            style: {
+              width: COLLAPSED_GROUP_WIDTH,
+              height: COLLAPSED_GROUP_HEIGHT,
+              pointerEvents: 'none',
+            },
             zIndex: 0,
             data: {
               ...existing?.data,
-              label: groupLabel(namespace, project),
+              label: namespace,
               namespace,
               collapsed: true,
               count: namespaceCounts.get(namespace) ?? 0,
@@ -425,6 +521,30 @@ function GraphCanvas({ entries, selection, onSelect, selectedObjects }) {
 
         for (const object of visible.objectNodes) {
           const existing = byId.get(object.id)
+          const internal = !internalIds || internalIds.has(object.id)
+
+          if (!internal) {
+            specs.push({
+              ...existing,
+              id: object.id,
+              type: 'dependency',
+              selectable: true,
+              position: positionsRef.current.get(object.id),
+              style: { width: DEPENDENCY_WIDTH },
+              zIndex: 1,
+              measured: existing?.measured,
+              data: {
+                ...existing?.data,
+                label: object.model?.name ?? object.id,
+                namespace: object.namespace ?? null,
+                color: colorFor(object.id),
+                highlighted: object.id === selectedId,
+                dimmed: Boolean(selectedId) && !relatedObjects.has(object.id),
+              },
+            })
+            continue
+          }
+
           specs.push({
             ...existing,
             id: object.id,
@@ -438,12 +558,18 @@ function GraphCanvas({ entries, selection, onSelect, selectedObjects }) {
               model: object.model,
               qualifiedName: object.id,
               namespace: object.namespace ?? null,
+              fileName: object.fileName ?? null,
+              conflict: object.conflict ?? false,
+              files: object.files ?? null,
+              revealOnClick: scope === 'file',
               index,
               color: colorFor(object.id),
               edgeMode,
               revealRefs,
+              linkedRefs,
               autoCollapse,
-              editMode,
+              attributeRelations,
+              rootGroup,
             },
           })
         }
@@ -495,11 +621,16 @@ function GraphCanvas({ entries, selection, onSelect, selectedObjects }) {
     index,
     namespaceCounts,
     revealRefs,
+    linkedRefs,
     groupRects,
-    project,
+    internalIds,
+    selectedId,
+    relatedObjects,
     contentKey,
     autoCollapse,
-    editMode,
+    attributeRelations,
+    rootGroup,
+    scope,
     units,
     sizes,
     measureKey,
@@ -634,12 +765,7 @@ function GraphCanvas({ entries, selection, onSelect, selectedObjects }) {
 
   return (
     <div className="relative h-full w-full">
-      <GraphSettings
-        autoCollapse={autoCollapse}
-        editMode={editMode}
-        onAutoCollapse={setAutoCollapse}
-        onEditMode={setEditMode}
-      />
+      <GraphSettings settings={graphSettings} onChange={updateSettings} />
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -673,7 +799,7 @@ function GraphCanvas({ entries, selection, onSelect, selectedObjects }) {
   )
 }
 
-export function GraphView({ entries, selection, onSelect, selectedObjects }) {
+export function GraphView({ entries, selection, onSelect, selectedObjects, scope, fileName }) {
   return (
     <ReactFlowProvider>
       <GraphCanvas
@@ -681,6 +807,8 @@ export function GraphView({ entries, selection, onSelect, selectedObjects }) {
         selection={selection}
         onSelect={onSelect}
         selectedObjects={selectedObjects}
+        scope={scope}
+        fileName={fileName}
       />
     </ReactFlowProvider>
   )

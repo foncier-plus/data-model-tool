@@ -1,287 +1,362 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
-  ChevronDown,
-  ChevronRight,
+  Box,
   FileText,
   Folder,
   FolderOpen,
-  Package,
-  Plus,
+  Pencil,
   RefreshCw,
+  Trash2,
 } from 'lucide-react'
-import { buildNamespaceTree, subtreeObjectIds } from '@/lib/model/hierarchy'
 import { NewEntryDialog } from '@/components/NewEntryDialog'
+import { fileVisual, FOLDER_TEXT } from '@/components/files/visuals'
+import { useProjectStore } from '@/lib/store/useProjectStore'
+import { handlesFromDataTransfer } from '@/lib/fs/picker'
 import { cn } from '@/lib/utils'
 
-function TriCheckbox({ checked, indeterminate, onChange, label }) {
-  const ref = useRef(null)
+function stripExtension(name) {
+  const dot = name.lastIndexOf('.')
+  return dot <= 0 ? name : name.slice(0, dot)
+}
+
+function extensionOf(name) {
+  const base = stripExtension(name)
+  return name.slice(base.length)
+}
+
+let dragSource = null
+
+function Menu({ menu, items, onClose }) {
   useEffect(() => {
-    if (ref.current) ref.current.indeterminate = indeterminate
-  }, [indeterminate])
-  return (
-    <input
-      ref={ref}
-      type="checkbox"
-      checked={checked}
-      onChange={onChange}
-      aria-label={label}
-      className="size-3.5 shrink-0 cursor-pointer accent-primary"
-    />
-  )
-}
+    if (!menu) return undefined
+    const close = () => onClose()
+    window.addEventListener('click', close)
+    window.addEventListener('resize', close)
+    window.addEventListener('scroll', close, true)
+    return () => {
+      window.removeEventListener('click', close)
+      window.removeEventListener('resize', close)
+      window.removeEventListener('scroll', close, true)
+    }
+  }, [menu, onClose])
 
-function FolderRow({
-  folder,
-  depth,
-  project,
-  isProject,
-  selectedObjects,
-  onToggleFolder,
-  onToggleProject,
-  onCreate,
-  expanded,
-  onToggleExpand,
-}) {
-  const ids = [...subtreeObjectIds(folder)]
-  const selectedCount = ids.filter((id) => selectedObjects.has(id)).length
-  const checked = ids.length > 0 && selectedCount === ids.length
-  const indeterminate = selectedCount > 0 && selectedCount < ids.length
+  if (!menu) return null
 
   return (
     <div
-      className="group/row flex items-center gap-1.5 rounded px-1 py-0.5 hover:bg-accent"
-      style={{ paddingLeft: depth * 12 + 4 }}
+      className="fixed z-50 min-w-44 overflow-hidden rounded-lg border bg-popover py-1 text-xs shadow-lg"
+      style={{ left: menu.x, top: menu.y }}
+      onClick={(event) => event.stopPropagation()}
     >
-      <button
-        type="button"
-        onClick={onToggleExpand}
-        aria-label={`${expanded ? 'Replier' : 'Déplier'} ${folder.name}`}
-        className="flex size-4 shrink-0 items-center justify-center text-muted-foreground hover:text-foreground"
-      >
-        {expanded ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
-      </button>
-      {isProject ? null : (
-        <TriCheckbox
-          checked={checked}
-          indeterminate={indeterminate}
-          onChange={() => onToggleFolder(ids, project)}
-          label={`Sélectionner ${folder.namespace}`}
-        />
-      )}
-      <button
-        type="button"
-        onClick={() => (isProject ? onToggleProject(ids, project) : onToggleExpand())}
-        aria-label={isProject ? `Afficher le projet ${folder.name}` : undefined}
-        className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-xs text-muted-foreground hover:text-foreground"
-      >
-        {isProject ? (
-          <Package className="size-3.5 shrink-0 text-primary/70" />
-        ) : expanded ? (
-          <FolderOpen className="size-3.5 shrink-0" />
+      {items.map((item, index) =>
+        item.separator ? (
+          <div key={`sep-${index}`} className="my-1 h-px bg-border" />
         ) : (
-          <Folder className="size-3.5 shrink-0" />
-        )}
-        <span className={isProject ? 'truncate font-semibold' : 'truncate font-mono'}>
-          {folder.name}
-        </span>
-        <span className="text-[10px] text-muted-foreground/60">{ids.length}</span>
-      </button>
-      <button
-        type="button"
-        onClick={() => onCreate(isProject ? 'namespace' : 'object')}
-        aria-label={
-          isProject
-            ? `Nouveau namespace dans ${folder.name}`
-            : `Nouvel objet dans ${folder.namespace}`
-        }
-        title={isProject ? 'Nouveau namespace' : 'Nouvel objet'}
-        className="flex size-5 shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 hover:bg-black/10 hover:text-foreground group-hover/row:opacity-100"
-      >
-        <Plus className="size-3.5" />
-      </button>
-    </div>
-  )
-}
-
-function FileRow({ file, depth, selectedObjects, onToggleObject }) {
-  const checked = selectedObjects.has(file.qualifiedName)
-  return (
-    <div
-      className="flex items-center gap-1.5 rounded px-1 py-0.5 hover:bg-accent"
-      style={{ paddingLeft: depth * 12 + 4 }}
-    >
-      <span className="flex size-4 shrink-0" />
-      <TriCheckbox
-        checked={checked}
-        indeterminate={false}
-        onChange={() => onToggleObject(file.qualifiedName)}
-        label={`Sélectionner ${file.qualifiedName}`}
-      />
-      <button
-        type="button"
-        onClick={() => onToggleObject(file.qualifiedName)}
-        className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-xs hover:text-foreground"
-      >
-        <FileText className="size-3.5 shrink-0 text-muted-foreground/60" />
-        <span className="truncate font-mono">{file.name}</span>
-      </button>
-    </div>
-  )
-}
-
-export function ExplorerPanel({
-  entries,
-  namespaces = [],
-  selectedObjects,
-  onChange,
-  onRefresh,
-  width = 256,
-}) {
-  const tree = useMemo(() => buildNamespaceTree(entries, namespaces), [entries, namespaces])
-  const [expanded, setExpanded] = useState(() => new Set())
-  const [createTarget, setCreateTarget] = useState(null)
-
-  const projectByObject = useMemo(() => {
-    const map = new Map()
-    for (const entry of entries) {
-      map.set(entry.qualifiedName, entry.namespace ? entry.namespace.split('.')[0] : null)
-    }
-    return map
-  }, [entries])
-
-  const activeProject = useMemo(() => {
-    for (const id of selectedObjects) return projectByObject.get(id) ?? null
-    return null
-  }, [selectedObjects, projectByObject])
-
-  const toggleExpand = (namespace) =>
-    setExpanded((previous) => {
-      const next = new Set(previous)
-      if (next.has(namespace)) next.delete(namespace)
-      else next.add(namespace)
-      return next
-    })
-
-  const commit = (project, mutate) => {
-    const next = new Set()
-    for (const id of selectedObjects) {
-      if (projectByObject.get(id) === project) next.add(id)
-    }
-    mutate(next)
-    onChange(next)
-  }
-
-  const toggleObject = (qualifiedName) => {
-    const project = projectByObject.get(qualifiedName)
-    commit(project, (next) => {
-      if (next.has(qualifiedName)) next.delete(qualifiedName)
-      else next.add(qualifiedName)
-    })
-  }
-
-  const toggleFolder = (ids, project) => {
-    commit(project, (next) => {
-      const allSelected = ids.length > 0 && ids.every((id) => next.has(id))
-      if (allSelected) for (const id of ids) next.delete(id)
-      else for (const id of ids) next.add(id)
-    })
-  }
-
-  const toggleProject = (ids, project) => {
-    commit(project, (next) => {
-      const allSelected = ids.length > 0 && ids.every((id) => next.has(id))
-      if (allSelected) for (const id of ids) next.delete(id)
-      else for (const id of ids) next.add(id)
-    })
-  }
-
-  const renderFolder = (folder, depth, project, isProject) => {
-    const active = isProject && activeProject === project
-    const body = (
-      <>
-        <FolderRow
-          folder={folder}
-          depth={depth}
-          project={project}
-          isProject={isProject}
-          selectedObjects={selectedObjects}
-          onToggleFolder={toggleFolder}
-          onToggleProject={toggleProject}
-          onCreate={(kind) =>
-            setCreateTarget({
-              kind,
-              base: isProject ? folder.name : folder.namespace.replace(/\./g, '/'),
-            })
-          }
-          expanded={expanded.has(folder.namespace)}
-          onToggleExpand={() => toggleExpand(folder.namespace)}
-        />
-        {expanded.has(folder.namespace) ? (
-          <>
-            {[...folder.folders.values()].map((child) =>
-              renderFolder(child, depth + 1, project, false),
+          <button
+            key={item.label}
+            type="button"
+            onClick={() => {
+              onClose()
+              item.onSelect()
+            }}
+            className={cn(
+              'flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-accent',
+              item.danger && 'text-destructive',
             )}
-            {folder.files.map((file) => (
-              <FileRow
-                key={file.qualifiedName}
-                file={file}
-                depth={depth + 1}
-                selectedObjects={selectedObjects}
-                onToggleObject={toggleObject}
-              />
-            ))}
-          </>
-        ) : null}
-      </>
-    )
+          >
+            {item.icon ? <item.icon className="size-3.5 text-muted-foreground" /> : null}
+            {item.label}
+          </button>
+        ),
+      )}
+    </div>
+  )
+}
 
-    if (!isProject) return <div key={folder.namespace}>{body}</div>
+function creationItems(dirPath, onCreate) {
+  return [
+    { label: 'Répertoire', icon: Folder, onSelect: () => onCreate(dirPath, 'folder') },
+    { separator: true },
+    { label: 'Fichier Markdown', icon: FileText, onSelect: () => onCreate(dirPath, 'markdown') },
+    { label: 'Fichier YAML', icon: Box, onSelect: () => onCreate(dirPath, 'object') },
+  ]
+}
 
+function TreeNode({ node, onCreate, depth = 0 }) {
+  const activeFile = useProjectStore((state) => state.activeFile)
+  const openFile = useProjectStore((state) => state.openFile)
+  const movePath = useProjectStore((state) => state.movePath)
+  const importHandles = useProjectStore((state) => state.importHandles)
+  const renamePath = useProjectStore((state) => state.renamePath)
+  const deletePath = useProjectStore((state) => state.deletePath)
+
+  const [expanded, setExpanded] = useState(depth === 0)
+  const [renaming, setRenaming] = useState(false)
+  const [menu, setMenu] = useState(null)
+  const [over, setOver] = useState(false)
+
+  const isDirectory = node.kind === 'directory'
+  const visual = isDirectory ? null : fileVisual(node.type)
+  const baseName = isDirectory ? node.name : stripExtension(node.name)
+  const extension = isDirectory ? '' : extensionOf(node.name)
+  const active = activeFile === node.path
+  const [draft, setDraft] = useState(baseName)
+
+  const startRename = () => {
+    setDraft(baseName)
+    setRenaming(true)
+  }
+
+  const commitRename = async () => {
+    const value = draft.trim()
+    setRenaming(false)
+    if (!value || value === baseName) return
+    await renamePath(node.path, `${value}${extension}`)
+  }
+
+  const handleDrop = async (event) => {
+    event.preventDefault()
+    event.stopPropagation()
+    setOver(false)
+    if (dragSource) {
+      const from = dragSource
+      dragSource = null
+      if (from === node.path) return
+      await movePath(from, node.path)
+      return
+    }
+    const handles = await handlesFromDataTransfer(event.dataTransfer)
+    if (handles.length > 0) await importHandles(node.path, handles)
+  }
+
+  const openMenu = (event) => {
+    event.preventDefault()
+    event.stopPropagation()
+    setMenu({ x: event.clientX, y: event.clientY })
+  }
+
+  const items = [
+    ...creationItems(node.path, onCreate),
+    ...(isDirectory
+      ? [
+          { separator: true },
+          { label: 'Renommer', icon: Pencil, onSelect: startRename },
+          {
+            label: 'Supprimer',
+            icon: Trash2,
+            danger: true,
+            onSelect: () => {
+              if (window.confirm(`Supprimer « ${node.path} » et son contenu ?`)) deletePath(node.path)
+            },
+          },
+        ]
+      : [
+          { separator: true },
+          { label: 'Renommer', icon: Pencil, onSelect: startRename },
+          {
+            label: 'Supprimer',
+            icon: Trash2,
+            danger: true,
+            onSelect: () => {
+              if (window.confirm(`Supprimer « ${node.path} » ?`)) deletePath(node.path)
+            },
+          },
+        ]),
+  ]
+
+  const nameField = renaming ? (
+    <input
+      autoFocus
+      value={draft}
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={commitRename}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') commitRename()
+        if (event.key === 'Escape') setRenaming(false)
+      }}
+      className="min-w-0 flex-1 rounded border border-primary/40 bg-white px-1 py-0.5 text-xs text-foreground outline-none dark:bg-zinc-900"
+    />
+  ) : (
+    <span
+      className="min-w-0 flex-1 truncate"
+      onDoubleClick={(event) => {
+        event.stopPropagation()
+        startRename()
+      }}
+    >
+      {baseName}
+    </span>
+  )
+
+  if (isDirectory) {
     return (
       <div
-        key={folder.namespace}
         className={cn(
-          'rounded-md border p-1 transition-colors',
-          active ? 'border-primary/50 bg-primary/5' : 'border-transparent',
+          'shrink-0 rounded-lg border transition-colors',
+          over
+            ? 'border-primary bg-primary/10 ring-1 ring-primary/40'
+            : 'border-zinc-200/80 bg-zinc-50/70 dark:border-zinc-700/50 dark:bg-zinc-800/30',
         )}
+        onDragEnter={(event) => {
+          event.preventDefault()
+          setOver(true)
+        }}
+        onDragOver={(event) => {
+          event.preventDefault()
+          event.stopPropagation()
+        }}
+        onDragLeave={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget)) setOver(false)
+        }}
+        onDrop={handleDrop}
       >
-        {body}
+        <div
+          role="button"
+          tabIndex={0}
+          draggable={!renaming}
+          onDragStart={(event) => {
+            dragSource = node.path
+            event.dataTransfer.effectAllowed = 'move'
+            event.dataTransfer.setData('text/plain', node.path)
+          }}
+          onContextMenu={openMenu}
+          onClick={() => {
+            if (!renaming) setExpanded((value) => !value)
+          }}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' && !renaming) setExpanded((value) => !value)
+          }}
+          className={cn(
+            'flex h-7 cursor-pointer items-center gap-1.5 px-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-200/50 dark:text-zinc-300 dark:hover:bg-zinc-700/40',
+            expanded ? 'rounded-t-lg' : 'rounded-lg',
+          )}
+        >
+          <button
+            type="button"
+            aria-label={expanded ? `Replier ${node.name}` : `Déplier ${node.name}`}
+            onClick={(event) => {
+              event.stopPropagation()
+              setExpanded((value) => !value)
+            }}
+            className={cn('flex size-4 shrink-0 items-center justify-center hover:text-foreground', FOLDER_TEXT)}
+          >
+            {expanded ? <FolderOpen className="size-4" /> : <Folder className="size-4" />}
+          </button>
+          {nameField}
+        </div>
+        {expanded ? (
+          <div className="flex flex-col gap-0.5 pt-0.5 pb-1 pl-2.5">
+            {(node.children ?? []).length > 0 ? (
+              (node.children ?? []).map((child) => (
+                <TreeNode key={child.path} node={child} onCreate={onCreate} depth={depth + 1} />
+              ))
+            ) : (
+              <span className="px-1 py-0.5 text-[10px] text-muted-foreground">Vide</span>
+            )}
+          </div>
+        ) : null}
+        <Menu menu={menu} items={items} onClose={() => setMenu(null)} />
       </div>
     )
   }
 
+  const Icon = visual.Icon
   return (
-    <aside
-      style={{ width }}
-      className="flex h-full shrink-0 flex-col overflow-hidden bg-muted/30"
+    <div
+      role="button"
+      tabIndex={0}
+      draggable={!renaming}
+      onDragStart={(event) => {
+        dragSource = node.path
+        event.dataTransfer.effectAllowed = 'move'
+        event.dataTransfer.setData('text/plain', node.path)
+      }}
+      onContextMenu={openMenu}
+      onClick={() => {
+        if (!renaming) openFile(node.path)
+      }}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' && !renaming) openFile(node.path)
+      }}
+      className={cn(
+        'flex h-7 shrink-0 cursor-pointer items-center gap-1.5 rounded-md px-1.5 text-xs',
+        visual.hover,
+        active && visual.active,
+        active && 'text-foreground',
+      )}
     >
-      <div className="flex items-center justify-between gap-1 border-b px-3 py-2">
-        <span className="text-xs font-semibold text-muted-foreground">Projets</span>
-        <button
-          type="button"
-          onClick={onRefresh}
-          aria-label="Rafraîchir"
-          title="Rafraîchir"
-          className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
-        >
-          <RefreshCw className="size-3.5" />
-        </button>
+      <Icon className={cn('size-4 shrink-0', visual.text)} />
+      {nameField}
+      <Menu menu={menu} items={items} onClose={() => setMenu(null)} />
+    </div>
+  )
+}
+
+export function ExplorerPanel({ width = 280 }) {
+  const tree = useProjectStore((state) => state.tree)
+  const refresh = useProjectStore((state) => state.refresh)
+  const movePath = useProjectStore((state) => state.movePath)
+  const importHandles = useProjectStore((state) => state.importHandles)
+  const [createTarget, setCreateTarget] = useState(null)
+  const [menu, setMenu] = useState(null)
+  const [rootOver, setRootOver] = useState(false)
+
+  const children = useMemo(() => tree?.children ?? [], [tree])
+
+  const onCreate = (dirPath, kind) => setCreateTarget({ dirPath, kind })
+
+  const openRootMenu = (event) => {
+    event.preventDefault()
+    setMenu({ x: event.clientX, y: event.clientY })
+  }
+
+  const rootDrop = async (event) => {
+    event.preventDefault()
+    setRootOver(false)
+    if (dragSource) {
+      const path = dragSource
+      dragSource = null
+      await movePath(path, '')
+      return
+    }
+    const handles = await handlesFromDataTransfer(event.dataTransfer)
+    if (handles.length > 0) await importHandles('', handles)
+  }
+
+  return (
+    <aside style={{ width }} className="flex h-full shrink-0 flex-col overflow-hidden border-r bg-sidebar">
+      <div
+        className={cn('flex min-h-0 flex-1 flex-col gap-0.5 overflow-auto p-1.5', rootOver && 'bg-primary/5')}
+        onContextMenu={openRootMenu}
+        onDragEnter={(event) => {
+          event.preventDefault()
+          setRootOver(true)
+        }}
+        onDragOver={(event) => event.preventDefault()}
+        onDragLeave={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget)) setRootOver(false)
+        }}
+        onDrop={rootDrop}
+      >
+        {children.length === 0 ? (
+          <p className="p-3 text-xs text-muted-foreground">
+            Notebook vide. Créez un fichier ou déposez des éléments.
+          </p>
+        ) : (
+          children.map((node) => <TreeNode key={node.path} node={node} onCreate={onCreate} />)
+        )}
       </div>
-      <div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-auto p-1.5">
-        {[...tree.folders.values()].map((folder) => renderFolder(folder, 0, folder.name, true))}
-        {tree.files.map((file) => (
-          <FileRow
-            key={file.qualifiedName}
-            file={file}
-            depth={0}
-            selectedObjects={selectedObjects}
-            onToggleObject={toggleObject}
-          />
-        ))}
-        {tree.files.length === 0 && tree.folders.size === 0 ? (
-          <p className="p-3 text-xs text-muted-foreground">Aucun projet.</p>
-        ) : null}
-      </div>
+
+      <Menu
+        menu={menu}
+        items={[
+          ...creationItems('', onCreate),
+          { separator: true },
+          { label: 'Rafraîchir', icon: RefreshCw, onSelect: refresh },
+        ]}
+        onClose={() => setMenu(null)}
+      />
+
       <NewEntryDialog target={createTarget} onClose={() => setCreateTarget(null)} />
     </aside>
   )

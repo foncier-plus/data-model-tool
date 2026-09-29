@@ -1,8 +1,8 @@
 import { writeComment } from './comments.js'
 
-const OBJECT_ORDER = ['name', 'type', 'description', 'attributes', 'groups']
+const OBJECT_ORDER = ['namespace', 'name', 'type', 'description', 'about', 'attributes', 'groups']
 const GROUP_ORDER = ['name', 'description', 'origin', 'attributes']
-const ATTRIBUTE_ORDER = ['name', 'type', 'optional', 'example', 'description', 'origin']
+const ATTRIBUTE_ORDER = ['name', 'type', 'presence', 'example', 'description', 'about', 'origin']
 const ORIGIN_ORDER = ['from', 'formula']
 
 function findPair(map, key) {
@@ -156,8 +156,9 @@ export function setAttributeField(doc, groupIndex, attributeIndex, key, value) {
     return
   }
   if (key === 'optional') {
-    if (value) setScalar(doc, item, 'optional', true)
-    else item.delete('optional')
+    if (value) setScalar(doc, item, 'presence', 'optional')
+    else item.delete('presence')
+    item.delete('optional')
     orderPairs(item, ATTRIBUTE_ORDER)
     return
   }
@@ -219,4 +220,38 @@ export function setObjectField(doc, key, value) {
 
 export function getObjectName(doc) {
   return doc.get('name') ?? ''
+}
+
+function orderOrigin(node) {
+  const origin = node?.get?.('origin')
+  if (origin && typeof origin.get === 'function') orderPairs(origin, ORIGIN_ORDER)
+}
+
+export function applyOrdering(doc) {
+  const root = doc?.contents
+  if (!root || typeof root.get !== 'function') return
+  orderPairs(root, OBJECT_ORDER)
+
+  const attributes = root.get('attributes')
+  if (Array.isArray(attributes?.items)) {
+    for (const item of attributes.items) {
+      orderPairs(item, ATTRIBUTE_ORDER)
+      orderOrigin(item)
+    }
+  }
+
+  const groups = root.get('groups')
+  if (Array.isArray(groups?.items)) {
+    for (const group of groups.items) {
+      orderPairs(group, GROUP_ORDER)
+      orderOrigin(group)
+      const groupAttributes = group?.get?.('attributes')
+      if (Array.isArray(groupAttributes?.items)) {
+        for (const item of groupAttributes.items) {
+          orderPairs(item, ATTRIBUTE_ORDER)
+          orderOrigin(item)
+        }
+      }
+    }
+  }
 }

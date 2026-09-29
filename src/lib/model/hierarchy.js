@@ -42,75 +42,9 @@ export function proxyId(objectName, namespace, collapsed) {
   return ancestor ? `ns:${ancestor}` : objectName
 }
 
-function displayName(entry, qualifiedName) {
-  if (entry.model?.name) return entry.model.name
-  const file = entry.fileName ?? ''
-  const base = file.slice(file.lastIndexOf('/') + 1).replace(/\.ya?ml$/, '')
-  return base || qualifiedName
-}
-
-export function buildNamespaceTree(entries, namespaces = []) {
-  const root = { namespace: null, folders: new Map(), files: [] }
-  const sorted = [...entries].sort((a, b) =>
-    (a.qualifiedName ?? '').localeCompare(b.qualifiedName ?? ''),
-  )
-  for (const entry of sorted) {
-    const qualifiedName = entry.qualifiedName ?? entry.model?.name ?? ''
-    const namespace = entry.namespace ?? null
-    if (!namespace) {
-      root.files.push({ qualifiedName, name: displayName(entry, qualifiedName) })
-      continue
-    }
-    let node = root
-    let current = ''
-    for (const part of namespace.split('.')) {
-      current = current ? `${current}.${part}` : part
-      if (!node.folders.has(part)) {
-        node.folders.set(part, {
-          name: part,
-          namespace: current,
-          folders: new Map(),
-          files: [],
-        })
-      }
-      node = node.folders.get(part)
-    }
-    node.files.push({ qualifiedName, name: displayName(entry, qualifiedName) })
-  }
-
-  for (const raw of namespaces) {
-    const qualified = raw.replace(/\//g, '.')
-    let node = root
-    let current = ''
-    for (const part of qualified.split('.')) {
-      current = current ? `${current}.${part}` : part
-      if (!node.folders.has(part)) {
-        node.folders.set(part, {
-          name: part,
-          namespace: current,
-          folders: new Map(),
-          files: [],
-        })
-      }
-      node = node.folders.get(part)
-    }
-  }
-
-  return root
-}
-
-export function subtreeObjectIds(tree) {
-  const ids = new Set()
-  const visit = (node) => {
-    for (const file of node.files) ids.add(file.qualifiedName)
-    for (const folder of node.folders.values()) visit(folder)
-  }
-  visit(tree)
-  return ids
-}
-
 export function filterObjectIds(objectGraph, selectedObjects) {
-  const base = new Set(selectedObjects ?? [])
+  if (!selectedObjects) return null
+  const base = new Set(selectedObjects)
   const ids = new Set(base)
   for (const edge of objectGraph.edges) {
     if (base.has(edge.target)) ids.add(edge.source)

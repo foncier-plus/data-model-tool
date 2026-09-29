@@ -144,6 +144,7 @@ function resolveScoped(index, key, project) {
 }
 
 export function resolveRef(ref, index, namespace = null) {
+  if (!ref) return null
   if (!namespace) return resolveScoped(index, ref, null)
 
   const project = namespace.split('.')[0]
@@ -151,11 +152,28 @@ export function resolveRef(ref, index, namespace = null) {
   if (sameNamespace) return sameNamespace
   const projectScoped = resolveScoped(index, `${project}.${ref}`, project)
   if (projectScoped) return projectScoped
-  if (ref.startsWith(`${project}.`)) {
-    const explicit = resolveScoped(index, ref, project)
-    if (explicit) return explicit
-  }
+  // Fully qualified cross-project reference, e.g. IGN.BDTOPO.batiment.hauteur.
+  const head = ref.split('.')[0]
+  const absolute = resolveScoped(index, ref, head)
+  if (absolute) return absolute
   return null
+}
+
+export function findObjectConflicts(objects) {
+  const byName = new Map()
+  for (const entry of objects) {
+    if (!entry.model) continue
+    const name = entryName(entry)
+    if (!name) continue
+    const files = byName.get(name) ?? new Set()
+    files.add(entry.fileName)
+    byName.set(name, files)
+  }
+  const conflicts = new Map()
+  for (const [name, files] of byName) {
+    if (files.size > 1) conflicts.set(name, [...files])
+  }
+  return conflicts
 }
 
 export function findElement(index, objectName, groupName, attributeName) {
@@ -167,6 +185,16 @@ export function findElement(index, objectName, groupName, attributeName) {
 export function validateReferences(objects) {
   const index = buildIndex(objects)
   const issues = []
+
+  for (const [name, files] of findObjectConflicts(objects)) {
+    issues.push({
+      code: 'conflict',
+      ref: name,
+      file: files[0],
+      files,
+      message: `Objet "${name}" déclaré dans plusieurs fichiers : ${files.join(', ')}`,
+    })
+  }
 
   for (const entry of objects) {
     const { model } = entry

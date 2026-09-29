@@ -48,7 +48,7 @@ groups:
 }
 
 function load() {
-  return Object.entries(FILES).map(([fileName, text]) => parseObjectFile(fileName, text))
+  return Object.entries(FILES).flatMap(([fileName, text]) => parseObjectFile(fileName, text).entries)
 }
 
 describe('object graph', () => {
@@ -107,6 +107,20 @@ describe('object graph', () => {
     const client = graphNeighbors(graph, 'client')
     expect(client.upstream.has('tiers')).toBe(true)
     expect(client.downstream.has('contract')).toBe(true)
+  })
+
+  it('links objects when the referenced attribute name is missing', () => {
+    const entries = [
+      ...parseObjectFile(
+        'a.yaml',
+        'namespace: NS1\nname: A\nattributes:\n  - name: x\n    origin:\n      from: [NS1.B.ghost]\n      formula: x\n',
+      ).entries,
+      ...parseObjectFile('b.yaml', 'namespace: NS1\nname: B\nattributes:\n  - name: real\n').entries,
+    ]
+    const index = buildIndex(entries)
+    const graph = buildObjectGraph(entries, index)
+    const edge = graph.edges.find((item) => item.source === 'NS1.B' && item.target === 'NS1.A')
+    expect(edge).toBeTruthy()
   })
 
   it('builds one attribute edge per origin with handle ids', () => {

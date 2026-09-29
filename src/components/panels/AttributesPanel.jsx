@@ -18,7 +18,7 @@ export function AttributesPanel({ entries, selection }) {
   if (!resolved?.model) {
     return (
       <p className="p-4 text-sm text-muted-foreground">
-        Select an object or a group to list its attributes.
+        Sélectionnez un objet ou un groupe pour lister ses attributs.
       </p>
     )
   }
@@ -31,15 +31,15 @@ export function AttributesPanel({ entries, selection }) {
   const list = group ? (group.attributes ?? []) : (model.attributes ?? [])
 
   const handleDelete = (index) => {
-    if (window.confirm(`Delete attribute "${list[index].name}"?`)) {
-      removeAttribute(entry.fileName, groupIndex, index)
+    if (window.confirm(`Supprimer l'attribut « ${list[index].name} » ?`)) {
+      removeAttribute(objectName, groupIndex, index)
     }
   }
 
   const commitAttribute = () => {
     const value = draft.trim()
     if (!value) return
-    addAttribute(entry.fileName, groupIndex, value)
+    addAttribute(objectName, groupIndex, value)
     setDraft('')
   }
 

@@ -26,5 +26,3 @@ dev-dist
 *.njsproj
 *.sln
 *.sw?
-
-objects/*

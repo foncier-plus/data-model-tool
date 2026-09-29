@@ -1,0 +1,28 @@
+namespace: NS4
+name: ObjectMu
+description: "Object Mu for example"
+about: "[[documentation.md#namespace-4]]"
+
+attributes:
+  - name: mu_1
+    type: number
+---
+
+namespace: NS4
+name: ObjectNu
+description: "Object Nu for example"
+about: "[[documentation.md#namespace-4]]"
+
+attributes:
+  - name: nu_1
+    type: number
+---
+
+namespace: NS4
+name: ObjectXi
+description: "Object Xi for example"
+about: "[[documentation.md#namespace-4]]"
+
+attributes:
+  - name: xi_1
+    type: number
