@@ -6,6 +6,7 @@ import {
   findObjectConflicts,
   groupRef,
   objectElements,
+  originKind,
   resolveRef,
   validateReferences,
 } from '@/lib/model/refs'
@@ -41,6 +42,16 @@ groups:
       - name: first_name
         type: string
 `
+
+describe('originKind', () => {
+  it('classifies attribute origins', () => {
+    expect(originKind(undefined)).toBe('none')
+    expect(originKind({ from: [], formula: '' })).toBe('none')
+    expect(originKind({ from: ['A.b'], formula: '' })).toBe('linked')
+    expect(originKind({ from: ['A.b'], formula: 'b' })).toBe('formula')
+    expect(originKind({ from: [], formula: 'b' })).toBe('formula')
+  })
+})
 
 describe('reference index', () => {
   it('indexes objects, groups and attributes', () => {

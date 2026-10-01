@@ -7,7 +7,10 @@ import { css as cssLanguage } from '@codemirror/lang-css'
 import { lintGutter, linter } from '@codemirror/lint'
 import { foldGutter } from '@codemirror/language'
 import { useTheme } from 'next-themes'
+import { WrapText } from 'lucide-react'
 import { yamlDiagnostics } from '@/lib/model/yamlErrors'
+import { useLocalStorageState } from '@/lib/useLocalStorageState'
+import { cn } from '@/lib/utils'
 import { tomorrowTheme, yesterdayTheme } from './codemirrorTheme'
 import { foldHoverHighlight } from './foldHover'
 
@@ -48,37 +51,49 @@ function yamlLintExtension() {
 export function CodeEditor({ value, onChange, language = 'yaml', readOnly = false, onView }) {
   const { resolvedTheme } = useTheme()
   const theme = resolvedTheme === 'dark' ? yesterdayTheme : tomorrowTheme
+  const [wrap, setWrap] = useLocalStorageState('data-flow.editor.wordwrap', true)
 
   const extensions = useMemo(() => {
     const languages = { markdown: markdownLanguage, css: cssLanguage, yaml: yamlLanguage }
     const factory = languages[language] ?? yamlLanguage
-    const list = [
-      factory(),
-      EditorView.lineWrapping,
-      foldGutter({ markerDOM: foldMarker }),
-      ...foldHoverHighlight,
-    ]
+    const list = [factory(), foldGutter({ markerDOM: foldMarker }), ...foldHoverHighlight]
+    if (wrap) list.push(EditorView.lineWrapping)
     if (language === 'yaml') list.push(yamlLintExtension(), lintGutter())
     return list
-  }, [language])
+  }, [language, wrap])
 
   return (
-    <CodeMirror
-      value={value}
-      height="100%"
-      theme={theme}
-      extensions={extensions}
-      editable={!readOnly}
-      onChange={onChange}
-      onCreateEditor={(view) => onView?.(view)}
-      basicSetup={{
-        lineNumbers: true,
-        foldGutter: false,
-        highlightActiveLine: true,
-        highlightActiveLineGutter: true,
-        autocompletion: false,
-      }}
-      className="h-full [&_.cm-editor]:h-full [&_.cm-scroller]:font-mono"
-    />
+    <div className="relative h-full">
+      <button
+        type="button"
+        title={wrap ? 'Désactiver le retour à la ligne' : 'Activer le retour à la ligne'}
+        aria-label="Retour à la ligne automatique"
+        aria-pressed={wrap}
+        onClick={() => setWrap((value) => !value)}
+        className={cn(
+          'absolute top-2 right-3 z-10 flex size-8 items-center justify-center rounded-lg border bg-background/90 text-muted-foreground shadow-sm backdrop-blur hover:bg-accent hover:text-foreground',
+          wrap && 'bg-accent text-foreground',
+        )}
+      >
+        <WrapText className="size-4" />
+      </button>
+      <CodeMirror
+        value={value}
+        height="100%"
+        theme={theme}
+        extensions={extensions}
+        editable={!readOnly}
+        onChange={onChange}
+        onCreateEditor={(view) => onView?.(view)}
+        basicSetup={{
+          lineNumbers: true,
+          foldGutter: false,
+          highlightActiveLine: true,
+          highlightActiveLineGutter: true,
+          autocompletion: false,
+        }}
+        className="h-full [&_.cm-editor]:h-full [&_.cm-scroller]:font-mono"
+      />
+    </div>
   )
 }

@@ -120,7 +120,7 @@ export function YamlDocumentView({ fileName }) {
           onClick={prettify}
           title="Reformater le YAML (prettify)"
           aria-label="Reformater le YAML"
-          className="absolute top-2 right-3 z-10 flex size-8 items-center justify-center rounded-lg border bg-background/90 text-muted-foreground shadow-sm backdrop-blur hover:bg-accent hover:text-foreground"
+          className="absolute top-2 right-12 z-10 flex size-8 items-center justify-center rounded-lg border bg-background/90 text-muted-foreground shadow-sm backdrop-blur hover:bg-accent hover:text-foreground"
         >
           <Wand2 className="size-4" />
         </button>

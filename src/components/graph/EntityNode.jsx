@@ -4,11 +4,12 @@ import {
   AlertTriangle,
   ChevronDown,
   ChevronRight,
+  Equal,
   GripVertical,
   Pencil,
   Sigma,
 } from 'lucide-react'
-import { attributeRef, groupRef, resolveRef } from '@/lib/model/refs'
+import { attributeRef, groupRef, originKind, resolveRef } from '@/lib/model/refs'
 import { useProjectStore } from '@/lib/store/useProjectStore'
 import { AboutLink } from '@/components/wiki/RichText'
 import { typeStyle, withAlpha } from '@/lib/colors'
@@ -56,7 +57,7 @@ function Row({
   type,
   optional,
   example,
-  derived,
+  kind = 'none',
   warning,
   color,
   edgeMode,
@@ -97,14 +98,22 @@ function Row({
         <span
           className={cn(
             'flex size-4 items-center justify-center rounded-sm',
-            derived ? 'bg-blue-400' : 'bg-zinc-200',
+            kind === 'formula' ? 'bg-blue-400' : kind === 'linked' ? 'bg-emerald-400' : 'bg-zinc-200',
           )}
-          title={derived ? 'Computed attribute' : 'Plain attribute'}
+          title={
+            kind === 'formula'
+              ? 'Attribut calculé (formule)'
+              : kind === 'linked'
+                ? 'Attribut lié (sans formule)'
+                : 'Attribut simple'
+          }
         >
-          {derived ? (
+          {kind === 'formula' ? (
             <Sigma className="size-2.5 text-white" />
+          ) : kind === 'linked' ? (
+            <Equal className="size-2.5 text-white" />
           ) : (
-            <Pencil className={cn('size-2.5', 'text-zinc-400')} />
+            <Pencil className="size-2.5 text-zinc-400" />
           )}
         </span>
         <span className="flex min-w-0 flex-col">
@@ -251,13 +260,13 @@ export function EntityNode({ data }) {
     else setManualCollapsed(update)
   }
 
-  const rowProps = (ref, label, type, optional, example, derived, warning, onClick) => ({
+  const rowProps = (ref, label, type, optional, example, kind, warning, onClick) => ({
     ref,
     label,
     type,
     optional,
     example,
-    derived,
+    kind,
     warning,
     color,
     edgeMode,
@@ -285,7 +294,7 @@ export function EntityNode({ data }) {
           attribute.type,
           attribute.optional,
           attribute.example,
-          Boolean(attribute.origin),
+          originKind(attribute.origin),
           isUnresolved(attribute.origin, index, namespace),
           () =>
             activate({
@@ -509,7 +518,7 @@ export function EntityNode({ data }) {
                           attribute.type,
                           attribute.optional,
                           attribute.example,
-                          Boolean(attribute.origin),
+                          originKind(attribute.origin),
                           isUnresolved(attribute.origin, index, namespace),
                           () =>
                             activate({

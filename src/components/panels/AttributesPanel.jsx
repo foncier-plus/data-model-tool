@@ -1,9 +1,9 @@
 import { useState } from 'react'
-import { Check, Pencil, Sigma, Trash2 } from 'lucide-react'
+import { Check, Equal, Pencil, Sigma, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { attributeRef } from '@/lib/model/refs'
+import { attributeRef, originKind } from '@/lib/model/refs'
 import { cn } from '@/lib/utils'
 import { resolveSelection } from '@/lib/selection'
 import { useProjectStore } from '@/lib/store/useProjectStore'
@@ -81,16 +81,23 @@ export function AttributesPanel({ entries, selection }) {
             {list.map((attribute, index) => {
               const ref = attributeRef(objectName, groupName, attribute.name)
               const iconClass = 'size-2.5 text-zinc-400'
+              const kind = originKind(attribute.origin)
               return (
                 <div key={ref} className="flex items-center gap-2 rounded-md font-mono border px-2 py-1">
                   <span
                     className={cn(
                       'flex size-4 shrink-0 items-center justify-center rounded-sm',
-                      attribute.origin ? 'bg-blue-400' : 'bg-zinc-200',
+                      kind === 'formula'
+                        ? 'bg-blue-400'
+                        : kind === 'linked'
+                          ? 'bg-emerald-400'
+                          : 'bg-zinc-200',
                     )}
                   >
-                    {attribute.origin ? (
-                      <Sigma className="size-2.5 text-white" title="Derived attribute" />
+                    {kind === 'formula' ? (
+                      <Sigma className="size-2.5 text-white" title="Attribut calculé (formule)" />
+                    ) : kind === 'linked' ? (
+                      <Equal className="size-2.5 text-white" title="Attribut lié (sans formule)" />
                     ) : (
                       <Pencil className={iconClass} />
                     )}

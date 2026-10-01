@@ -30,6 +30,13 @@ export function objectElements(model) {
   return [...elements]
 }
 
+export function originKind(origin) {
+  if (!origin) return 'none'
+  if (String(origin.formula ?? '').trim()) return 'formula'
+  if ((origin.from ?? []).length > 0) return 'linked'
+  return 'none'
+}
+
 export function elementOwnerRef(element) {
   if (!element) return null
   if (element.kind === 'attribute' && element.groupName) {

@@ -11,7 +11,7 @@ import {
   useUpdateNodeInternals,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { attributeRef, buildIndex } from '@/lib/model/refs'
+import { attributeRef, buildIndex, resolveRef, validateReferences } from '@/lib/model/refs'
 import {
   buildAttributeEdges,
   buildObjectGraph,
@@ -55,21 +55,37 @@ const GRAPH_BACKGROUND = {
   bgColor: 'var(--graph-background)',
 }
 
+// Files living in a root-level directory whose name starts with "_" are
+// hidden from the data model (e.g. "_draft", "_archive").
+function isHiddenRootFile(fileName) {
+  const slash = fileName.indexOf('/')
+  if (slash === -1) return false
+  return fileName.slice(0, slash).startsWith('_')
+}
+
 function GraphCanvas({ entries, selection, onSelect, selectedObjects, scope = 'all', fileName = null }) {
   const { fitView } = useReactFlow()
   const updateNodeInternals = useUpdateNodeInternals()
   const linkAttributes = useProjectStore((state) => state.linkAttributes)
 
-  const index = useMemo(() => buildIndex(entries), [entries])
-  const fullObjectGraph = useMemo(() => buildObjectGraph(entries, index), [entries, index])
-  const attributeGraph = useMemo(() => buildAttributeEdges(entries, index), [entries, index])
+  const graphEntries = useMemo(
+    () =>
+      scope === 'file' ? entries : entries.filter((entry) => !isHiddenRootFile(entry.fileName)),
+    [entries, scope],
+  )
+  const index = useMemo(() => buildIndex(graphEntries), [graphEntries])
+  const fullObjectGraph = useMemo(() => buildObjectGraph(graphEntries, index), [graphEntries, index])
+  const attributeGraph = useMemo(
+    () => buildAttributeEdges(graphEntries, index),
+    [graphEntries, index],
+  )
 
   const internalIds = useMemo(() => {
     if (scope !== 'file' || !fileName) return null
     return new Set(
-      entries.filter((entry) => entry.fileName === fileName).map((entry) => entry.qualifiedName),
+      graphEntries.filter((entry) => entry.fileName === fileName).map((entry) => entry.qualifiedName),
     )
-  }, [scope, fileName, entries])
+  }, [scope, fileName, graphEntries])
 
   const objectIds = useMemo(
     () => filterObjectIds(fullObjectGraph, internalIds ?? selectedObjects),
@@ -81,8 +97,9 @@ function GraphCanvas({ entries, selection, onSelect, selectedObjects, scope = 'a
     rootGroup: false,
     autoCollapse: true,
     attributeRelations: false,
+    showParentObjects: false,
   })
-  const { rootGroup, autoCollapse, attributeRelations } = graphSettings
+  const { rootGroup, autoCollapse, attributeRelations, showParentObjects } = graphSettings
   const updateSettings = (patch) => setGraphSettings((previous) => ({ ...previous, ...patch }))
   const visible = useMemo(
     () => buildVisibleGraph(fullObjectGraph, collapsed, objectIds),
@@ -166,6 +183,40 @@ function GraphCanvas({ entries, selection, onSelect, selectedObjects, scope = 'a
     return set
   }, [attributeRelations, attributeGraph, visible])
 
+  // File scope: only issues of the edited YAML file. Data model: every issue.
+  // Grouped by owning object.
+  const issueGroups = useMemo(() => {
+    const all = validateReferences(graphEntries)
+    const filtered =
+      scope === 'file' && fileName ? all.filter((issue) => issue.file === fileName) : all
+    const groups = new Map()
+    for (const issue of filtered) {
+      const element = resolveRef(issue.ref, index)
+      const objectName = element?.objectName ?? issue.ref
+      if (!groups.has(objectName)) {
+        groups.set(objectName, {
+          objectName,
+          label: element?.model?.name ?? objectName,
+          issues: [],
+        })
+      }
+      groups.get(objectName).issues.push(issue)
+    }
+    return [...groups.values()]
+  }, [graphEntries, scope, fileName, index])
+  const revealSelection = useProjectStore((state) => state.revealSelection)
+  const handleSelectIssue = (issue) => {
+    const element = resolveRef(issue.ref, index)
+    if (!element) return
+    revealSelection({
+      kind: element.kind,
+      objectName: element.objectName,
+      groupName: element.groupName ?? null,
+      attributeName: element.attributeName ?? null,
+      ref: element.ref,
+    })
+  }
+
   const relatedObjects = useMemo(() => {
     const set = new Set()
     if (!selectedId) return set
@@ -183,7 +234,7 @@ function GraphCanvas({ entries, selection, onSelect, selectedObjects, scope = 'a
 
   const selectedGroupRefs = useMemo(() => {
     if (selection?.kind !== 'group') return null
-    const entry = entries.find((item) => item.qualifiedName === selection.objectName)
+    const entry = graphEntries.find((item) => item.qualifiedName === selection.objectName)
     const group = entry?.model?.groups?.find((item) => item.name === selection.groupName)
     if (!group) return null
     return new Set(
@@ -191,7 +242,7 @@ function GraphCanvas({ entries, selection, onSelect, selectedObjects, scope = 'a
         attributeRef(selection.objectName, group.name, attribute.name),
       ),
     )
-  }, [selection, entries])
+  }, [selection, graphEntries])
 
   const [nodes, setNodes, onNodesChange] = useNodesState([])
   const [edges, setEdges, onEdgesChange] = useEdgesState([])
@@ -460,7 +511,7 @@ function GraphCanvas({ entries, selection, onSelect, selectedObjects, scope = 'a
         return `${namespace}:${position.x}:${position.y}`
       })
       .join('|')
-    const signature = `${edgeMode}~${scope}~${autoCollapse}~${rootGroup}~${attributeRelations}~${revealKey}~${countsKey}~${objectKey}~${groupKey}~${collapsedKey}~${contentKey}`
+    const signature = `${edgeMode}~${scope}~${autoCollapse}~${rootGroup}~${attributeRelations}~${showParentObjects}~${revealKey}~${countsKey}~${objectKey}~${groupKey}~${collapsedKey}~${contentKey}`
 
     if (appliedRef.current.signature !== signature) {
       appliedRef.current.signature = signature
@@ -521,9 +572,11 @@ function GraphCanvas({ entries, selection, onSelect, selectedObjects, scope = 'a
 
         for (const object of visible.objectNodes) {
           const existing = byId.get(object.id)
-          const internal = !internalIds || internalIds.has(object.id)
+          const condensed = Boolean(
+            internalIds && !internalIds.has(object.id) && !showParentObjects,
+          )
 
-          if (!internal) {
+          if (condensed) {
             specs.push({
               ...existing,
               id: object.id,
@@ -629,6 +682,7 @@ function GraphCanvas({ entries, selection, onSelect, selectedObjects, scope = 'a
     contentKey,
     autoCollapse,
     attributeRelations,
+    showParentObjects,
     rootGroup,
     scope,
     units,
@@ -765,7 +819,12 @@ function GraphCanvas({ entries, selection, onSelect, selectedObjects, scope = 'a
 
   return (
     <div className="relative h-full w-full">
-      <GraphSettings settings={graphSettings} onChange={updateSettings} />
+      <GraphSettings
+        settings={graphSettings}
+        onChange={updateSettings}
+        issueGroups={issueGroups}
+        onSelectIssue={handleSelectIssue}
+      />
       <ReactFlow
         nodes={nodes}
         edges={edges}
