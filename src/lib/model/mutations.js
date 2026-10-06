@@ -123,8 +123,6 @@ export function addAttribute(doc, groupIndex = null, name) {
   const seq = ensureAttributeSequence(doc, groupIndex)
   const node = doc.createNode({
     name: uniqueName(seq, name || 'new_attribute'),
-    type: 'string',
-    description: '',
   })
   seq.add(node)
   return seq.items.length - 1
@@ -145,6 +143,16 @@ export function moveAttribute(doc, fromGroupIndex, attributeIndex, toGroupIndex)
   fromSeq.items.splice(attributeIndex, 1)
   pruneSequence(doc, fromGroupIndex, fromSeq)
   ensureAttributeSequence(doc, toGroupIndex).add(node)
+}
+
+export function reorderAttribute(doc, groupIndex, fromIndex, toIndex) {
+  const seq = getAttributeSequence(doc, groupIndex)
+  if (!seq) return
+  if (fromIndex === toIndex) return
+  if (fromIndex < 0 || fromIndex >= seq.items.length) return
+  const [node] = seq.items.splice(fromIndex, 1)
+  const target = Math.max(0, Math.min(toIndex, seq.items.length))
+  seq.items.splice(target, 0, node)
 }
 
 export function setAttributeField(doc, groupIndex, attributeIndex, key, value) {
@@ -190,6 +198,16 @@ export function removeGroup(doc, groupIndex) {
   if (!Array.isArray(seq?.items) || !seq.items[groupIndex]) return
   seq.items.splice(groupIndex, 1)
   if (seq.items.length === 0) doc.delete('groups')
+}
+
+export function moveGroup(doc, fromIndex, toIndex) {
+  const seq = doc.get('groups')
+  if (!Array.isArray(seq?.items)) return
+  if (fromIndex === toIndex) return
+  if (fromIndex < 0 || fromIndex >= seq.items.length) return
+  const [node] = seq.items.splice(fromIndex, 1)
+  const target = Math.max(0, Math.min(toIndex, seq.items.length))
+  seq.items.splice(target, 0, node)
 }
 
 export function setGroupField(doc, groupIndex, key, value) {

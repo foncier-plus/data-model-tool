@@ -1,6 +1,7 @@
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { attributeRef, collectOrigins, resolveRef } from '@/lib/model/refs'
+import { useMemo } from 'react'
+import { attributeRef, buildIndex, collectOrigins, resolveRef } from '@/lib/model/refs'
 import { resolveSelection } from '@/lib/selection'
+import { useTranslation } from '@/lib/i18n'
 import { useProjectStore } from '@/lib/store/useProjectStore'
 
 function rowsFor(resolved, selection) {
@@ -34,6 +35,7 @@ function shortRef(ref, namespace) {
 }
 
 function OriginCard({ row, index, namespace, onSelect }) {
+  const { t } = useTranslation()
   const sources = row.origin.from ?? []
   const element = resolveRef(row.ref, index)
 
@@ -48,7 +50,9 @@ function OriginCard({ row, index, namespace, onSelect }) {
       </div>
 
       <div className="flex flex-col gap-0.5">
-        <span className="text-[10px] tracking-wide text-muted-foreground uppercase">Sources</span>
+        <span className="text-[10px] tracking-wide text-muted-foreground uppercase">
+          {t('origin.sources')}
+        </span>
         {sources.length ? (
           <div className="flex flex-col gap-0.5">
             {sources.map((ref) => {
@@ -71,7 +75,7 @@ function OriginCard({ row, index, namespace, onSelect }) {
       {row.origin.formula ? (
         <div className="flex flex-col gap-0.5">
           <span className="text-[10px] tracking-wide text-muted-foreground uppercase">
-            Formula
+            {t('origin.formula')}
           </span>
           <pre className="rounded bg-muted p-2 text-xs whitespace-pre-wrap">
             {row.origin.formula}
@@ -84,17 +88,15 @@ function OriginCard({ row, index, namespace, onSelect }) {
   )
 }
 
-export function FormulaPanel({ entries, selection, index }) {
+export function FormulaPanel() {
+  const { t } = useTranslation()
+  const selection = useProjectStore((state) => state.selection)
+  const entries = useProjectStore((state) => state.entries)
   const select = useProjectStore((state) => state.select)
+  const index = useMemo(() => buildIndex(entries), [entries])
   const resolved = resolveSelection(entries, selection)
 
-  if (!resolved) {
-    return (
-      <p className="p-4 text-sm text-muted-foreground">
-        Select an object, group or attribute to inspect its origin.
-      </p>
-    )
-  }
+  if (!resolved) return null
 
   const rows = rowsFor(resolved, selection).filter(
     (row) => row.origin?.from?.length || row.origin?.formula,
@@ -110,30 +112,21 @@ export function FormulaPanel({ entries, selection, index }) {
     })
   }
 
-  return (
-    <ScrollArea className="h-full">
-      <div className="flex flex-col gap-3 p-4">
-        <div hidden>
-          <p className="text-sm font-medium">{shortRef(selection.ref, resolved.entry.namespace)}</p>
-          <p className="text-xs text-muted-foreground">
-            {rows.length} derivation{rows.length > 1 ? 's' : ''}
-          </p>
-        </div>
+  if (rows.length === 0) {
+    return <p className="text-sm text-muted-foreground">{t('formula.empty')}</p>
+  }
 
-        {rows.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No formula for this selection.</p>
-        ) : (
-          rows.map((row) => (
-            <OriginCard
-              key={row.ref}
-              row={row}
-              index={index}
-              namespace={resolved.entry.namespace ?? null}
-              onSelect={handleSelect}
-            />
-          ))
-        )}
-      </div>
-    </ScrollArea>
+  return (
+    <div className="flex flex-col gap-3">
+      {rows.map((row) => (
+        <OriginCard
+          key={row.ref}
+          row={row}
+          index={index}
+          namespace={resolved.entry.namespace ?? null}
+          onSelect={handleSelect}
+        />
+      ))}
+    </div>
   )
 }

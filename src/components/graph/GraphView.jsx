@@ -21,6 +21,7 @@ import {
 import {
   buildVisibleGraph,
   filterObjectIds,
+  namespaceLabel,
   namespacePrefixes,
 } from '@/lib/model/hierarchy'
 import { colorFor } from '@/lib/colors'
@@ -87,20 +88,31 @@ function GraphCanvas({ entries, selection, onSelect, selectedObjects, scope = 'a
     )
   }, [scope, fileName, graphEntries])
 
-  const objectIds = useMemo(
-    () => filterObjectIds(fullObjectGraph, internalIds ?? selectedObjects),
-    [fullObjectGraph, selectedObjects, internalIds],
-  )
-
   const [collapsed, setCollapsed] = useState(() => new Set())
   const [graphSettings, setGraphSettings] = useLocalStorageState('data-flow.graph-settings', {
     rootGroup: false,
     autoCollapse: true,
     attributeRelations: false,
     showParentObjects: false,
+    showChildObjects: false,
   })
-  const { rootGroup, autoCollapse, attributeRelations, showParentObjects } = graphSettings
+  const {
+    rootGroup,
+    autoCollapse,
+    attributeRelations,
+    showParentObjects,
+    showChildObjects = false,
+  } = graphSettings
   const updateSettings = (patch) => setGraphSettings((previous) => ({ ...previous, ...patch }))
+
+  const objectIds = useMemo(
+    () =>
+      filterObjectIds(fullObjectGraph, internalIds ?? selectedObjects, {
+        children: showChildObjects,
+      }),
+    [fullObjectGraph, selectedObjects, internalIds, showChildObjects],
+  )
+
   const visible = useMemo(
     () => buildVisibleGraph(fullObjectGraph, collapsed, objectIds),
     [fullObjectGraph, collapsed, objectIds],
@@ -149,7 +161,7 @@ function GraphCanvas({ entries, selection, onSelect, selectedObjects, scope = 'a
   const refNeighbors = useMemo(() => {
     const up = new Set()
     const down = new Set()
-    if (edgeMode !== 'attribute' || !selection) return { up, down }
+    if (edgeMode !== 'attribute' || selection?.kind !== 'attribute') return { up, down }
     for (const edge of attributeGraph.edges) {
       if (edge.targetRef === selection.ref) up.add(edge.sourceRef)
       if (edge.sourceRef === selection.ref) down.add(edge.targetRef)
@@ -511,7 +523,7 @@ function GraphCanvas({ entries, selection, onSelect, selectedObjects, scope = 'a
         return `${namespace}:${position.x}:${position.y}`
       })
       .join('|')
-    const signature = `${edgeMode}~${scope}~${autoCollapse}~${rootGroup}~${attributeRelations}~${showParentObjects}~${revealKey}~${countsKey}~${objectKey}~${groupKey}~${collapsedKey}~${contentKey}`
+    const signature = `${edgeMode}~${scope}~${autoCollapse}~${rootGroup}~${attributeRelations}~${showParentObjects}~${showChildObjects}~${revealKey}~${countsKey}~${objectKey}~${groupKey}~${collapsedKey}~${contentKey}`
 
     if (appliedRef.current.signature !== signature) {
       appliedRef.current.signature = signature
@@ -533,7 +545,7 @@ function GraphCanvas({ entries, selection, onSelect, selectedObjects, scope = 'a
             zIndex: 0,
             data: {
               ...existing?.data,
-              label: fullName,
+              label: namespaceLabel(fullName),
               namespace: fullName,
               collapsed: false,
               count: namespaceCounts.get(fullName) ?? 0,
@@ -560,7 +572,7 @@ function GraphCanvas({ entries, selection, onSelect, selectedObjects, scope = 'a
             zIndex: 0,
             data: {
               ...existing?.data,
-              label: namespace,
+              label: namespaceLabel(namespace),
               namespace,
               collapsed: true,
               count: namespaceCounts.get(namespace) ?? 0,
@@ -572,9 +584,8 @@ function GraphCanvas({ entries, selection, onSelect, selectedObjects, scope = 'a
 
         for (const object of visible.objectNodes) {
           const existing = byId.get(object.id)
-          const condensed = Boolean(
-            internalIds && !internalIds.has(object.id) && !showParentObjects,
-          )
+          const external = Boolean(internalIds && !internalIds.has(object.id))
+          const condensed = external && !showParentObjects
 
           if (condensed) {
             specs.push({
@@ -589,10 +600,12 @@ function GraphCanvas({ entries, selection, onSelect, selectedObjects, scope = 'a
               data: {
                 ...existing?.data,
                 label: object.model?.name ?? object.id,
+                qualifiedName: object.id,
                 namespace: object.namespace ?? null,
                 color: colorFor(object.id),
                 highlighted: object.id === selectedId,
                 dimmed: Boolean(selectedId) && !relatedObjects.has(object.id),
+                external,
               },
             })
             continue
@@ -623,6 +636,7 @@ function GraphCanvas({ entries, selection, onSelect, selectedObjects, scope = 'a
               autoCollapse,
               attributeRelations,
               rootGroup,
+              external,
             },
           })
         }
@@ -683,6 +697,7 @@ function GraphCanvas({ entries, selection, onSelect, selectedObjects, scope = 'a
     autoCollapse,
     attributeRelations,
     showParentObjects,
+    showChildObjects,
     rootGroup,
     scope,
     units,
@@ -740,7 +755,10 @@ function GraphCanvas({ entries, selection, onSelect, selectedObjects, scope = 'a
   )
 
   useEffect(() => {
-    const hasHighlight = edgeMode === 'attribute' && Boolean(selection)
+    // Only a focused attribute (or group) dims the other attributes and
+    // highlights its connections. Selecting an object must not gray out rows.
+    const hasHighlight =
+      edgeMode === 'attribute' && Boolean(selection) && selection.kind !== 'object'
 
     setNodes((previous) =>
       previous.map((node) => ({

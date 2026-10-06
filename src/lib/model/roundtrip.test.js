@@ -3,8 +3,10 @@ import {
   addAttribute,
   addGroup,
   moveAttribute,
+  moveGroup,
   removeAttribute,
   removeGroup,
+  reorderAttribute,
   setAttributeField,
   setGroupField,
   setObjectField,
@@ -167,5 +169,31 @@ describe('yaml round trip', () => {
     const { model } = load(serializeObject(doc))
     expect(model.groups[0].comment).toBe('group note')
     expect(model.groups[0].origin).toEqual({ from: ['client.id'], formula: 'id' })
+  })
+
+  it('reorders groups', () => {
+    const source = `name: client
+groups:
+  - name: a
+  - name: b
+  - name: c
+`
+    const { doc } = load(source)
+    moveGroup(doc, 0, 2)
+    const { model } = load(serializeObject(doc))
+    expect(model.groups.map((group) => group.name)).toEqual(['b', 'c', 'a'])
+  })
+
+  it('reorders attributes within a list', () => {
+    const source = `name: client
+attributes:
+  - name: a
+  - name: b
+  - name: c
+`
+    const { doc } = load(source)
+    reorderAttribute(doc, null, 0, 2)
+    const { model } = load(serializeObject(doc))
+    expect(model.attributes.map((attribute) => attribute.name)).toEqual(['b', 'c', 'a'])
   })
 })

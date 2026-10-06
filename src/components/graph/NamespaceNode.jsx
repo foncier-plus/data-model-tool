@@ -1,8 +1,10 @@
 import { Handle, Position } from '@xyflow/react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
+import { useTranslation } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 
 export function NamespaceNode({ data }) {
+  const { t } = useTranslation()
   const { label, namespace, collapsed, count, edgeMode, onToggle } = data
   const showHandles = collapsed && edgeMode === 'aggregated'
 
@@ -30,7 +32,12 @@ export function NamespaceNode({ data }) {
           event.stopPropagation()
           onToggle?.(namespace)
         }}
-        aria-label={collapsed ? `Déplier ${namespace}` : `Replier ${namespace}`}
+        aria-label={
+          collapsed
+            ? t('namespace.expand', { name: namespace })
+            : t('namespace.collapse', { name: namespace })
+        }
+        title={namespace}
         className="pointer-events-auto flex h-7 w-full items-center gap-1 rounded-t-lg px-2 text-xs font-semibold text-sky-700 hover:bg-sky-100/70 dark:text-sky-300 dark:hover:bg-sky-900/40"
       >
         {collapsed ? (

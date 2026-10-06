@@ -40,8 +40,8 @@ describe('OriginForm', () => {
       />,
     )
 
-    expect(screen.getByText('tiers.id')).toBeTruthy()
-    expect(screen.getByPlaceholderText('object.attribute').value).toBe('')
+    expect(screen.getByDisplayValue('tiers.id')).toBeTruthy()
+    expect(screen.getByPlaceholderText('ajouter une source').value).toBe('')
   })
 
   it('suggests existing references', () => {
@@ -68,7 +68,7 @@ describe('OriginForm', () => {
       />,
     )
 
-    const draft = screen.getByPlaceholderText('object.attribute')
+    const draft = screen.getByPlaceholderText('ajouter une source')
     fireEvent.change(draft, { target: { value: 'client.id_client' } })
     fireEvent.keyDown(draft, { key: 'Enter' })
 
@@ -106,6 +106,6 @@ describe('OriginForm', () => {
     )
     expect(refs).toContain('tiers.id')
     expect(refs).not.toContain('other.x')
-    expect(screen.getByText('tiers.id')).toBeTruthy()
+    expect(screen.getByDisplayValue('Proj A.tiers.id')).toBeTruthy()
   })
 })

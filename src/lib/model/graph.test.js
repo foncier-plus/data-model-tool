@@ -123,6 +123,37 @@ describe('object graph', () => {
     expect(edge).toBeTruthy()
   })
 
+  it('links an object to an attribute computed from it', () => {
+    const entries = [
+      ...parseObjectFile('a.yaml', 'namespace: NS1\nname: A\nattributes:\n  - name: x\n').entries,
+      ...parseObjectFile(
+        'b.yaml',
+        'namespace: NS1\nname: B\nattributes:\n  - name: y\n    origin:\n      from: [NS1.A]\n      formula: from A\n',
+      ).entries,
+    ]
+    const index = buildIndex(entries)
+    const { edges } = buildAttributeEdges(entries, index)
+    const edge = edges.find((item) => item.id === 'NS1.A->NS1.B.y')
+    expect(edge).toBeTruthy()
+    expect(edge.source).toBe('NS1.A')
+    expect(edge.target).toBe('NS1.B')
+    expect(edge.sourceHandle).toBe('NS1.A')
+    expect(edge.targetHandle).toBe('NS1.B.y')
+  })
+
+  it('falls back to the object when the referenced attribute is missing', () => {
+    const entries = [
+      ...parseObjectFile('a.yaml', 'namespace: NS1\nname: A\nattributes:\n  - name: real\n').entries,
+      ...parseObjectFile(
+        'b.yaml',
+        'namespace: NS1\nname: B\nattributes:\n  - name: y\n    origin:\n      from: [NS1.A.ghost]\n      formula: x\n',
+      ).entries,
+    ]
+    const index = buildIndex(entries)
+    const { edges } = buildAttributeEdges(entries, index)
+    expect(edges.find((item) => item.id === 'NS1.A->NS1.B.y')).toBeTruthy()
+  })
+
   it('builds one attribute edge per origin with handle ids', () => {
     const { edges } = buildAttributeEdges(entries, index)
     const ids = edges.map((edge) => edge.id)

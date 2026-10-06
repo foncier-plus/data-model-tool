@@ -7,6 +7,13 @@ export function namespaceParent(namespace) {
   return parts.length > 1 ? parts.slice(0, -1).join('.') : null
 }
 
+// Sub-namespaces are nested inside their parent container, so only the last
+// segment is shown to avoid repeating the parent name.
+export function namespaceLabel(namespace) {
+  const parts = namespaceParts(namespace)
+  return parts.length ? parts[parts.length - 1] : namespace
+}
+
 export function namespacePrefixes(namespace) {
   const parts = namespaceParts(namespace)
   const prefixes = []
@@ -42,12 +49,13 @@ export function proxyId(objectName, namespace, collapsed) {
   return ancestor ? `ns:${ancestor}` : objectName
 }
 
-export function filterObjectIds(objectGraph, selectedObjects) {
+export function filterObjectIds(objectGraph, selectedObjects, { children = false } = {}) {
   if (!selectedObjects) return null
   const base = new Set(selectedObjects)
   const ids = new Set(base)
   for (const edge of objectGraph.edges) {
     if (base.has(edge.target)) ids.add(edge.source)
+    if (children && base.has(edge.source)) ids.add(edge.target)
   }
   return ids
 }

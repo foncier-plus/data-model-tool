@@ -1,22 +1,17 @@
 import { Fragment } from 'react'
-import { ChevronRight, Trash2 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { ChevronRight, FileCode } from 'lucide-react'
+import { useTranslation } from '@/lib/i18n'
 import { useProjectStore } from '@/lib/store/useProjectStore'
 import { attributeRef, groupRef } from '@/lib/model/refs'
 import { cn } from '@/lib/utils'
 
-function shortName(name, project) {
-  if (project && name.startsWith(`${project}.`)) return name.slice(project.length + 1)
-  return name
-}
-
-function buildItems(selection, project) {
+function buildItems(selection, objectLabel) {
   if (!selection) return []
   const { objectName, groupName, attributeName } = selection
   const items = [
     {
       key: 'object',
-      label: shortName(objectName, project),
+      label: objectLabel ?? objectName,
       selection: {
         kind: 'object',
         objectName,
@@ -56,31 +51,27 @@ function buildItems(selection, project) {
 }
 
 export function Breadcrumb({ selection }) {
+  const { t } = useTranslation()
   const select = useProjectStore((state) => state.select)
-  const deleteEntry = useProjectStore((state) => state.deleteEntry)
+  const revealSelection = useProjectStore((state) => state.revealSelection)
   const entries = useProjectStore((state) => state.entries)
   const entry = selection
     ? entries.find(
         (item) => (item.qualifiedName ?? item.model?.name) === selection.objectName,
       )
     : null
-  const project = entry?.namespace ? entry.namespace.split('.')[0] : null
-  const items = buildItems(selection, project)
+  const items = buildItems(selection, entry?.model?.name)
 
   if (items.length === 0) {
     return (
       <div className="border-b bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
-        Aucune sélection
+        {t('breadcrumb.noSelection')}
       </div>
     )
   }
 
-  const handleDelete = () => {
-    if (!entry) return
-    if (window.confirm(`Supprimer l'objet « ${entry.model?.name} » ?`)) {
-      deleteEntry(selection.objectName)
-    }
-  }
+  const fileName = entry?.fileName
+  const baseName = fileName ? fileName.split('/').pop() : null
 
   return (
     <div className="flex items-center gap-1 border-b bg-muted/50 px-2 py-1.5">
@@ -103,16 +94,16 @@ export function Breadcrumb({ selection }) {
           </Fragment>
         ))}
       </div>
-      {entry ? (
-        <Button
-          variant="ghost"
-          size="icon"
-          className="size-6 shrink-0 text-destructive"
-          title="Delete object"
-          onClick={handleDelete}
+      {fileName ? (
+        <button
+          type="button"
+          title={fileName}
+          onClick={() => revealSelection(selection)}
+          className="flex max-w-40 shrink-0 items-center gap-1 truncate rounded px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground hover:bg-accent hover:text-foreground"
         >
-          <Trash2 className="size-3.5" />
-        </Button>
+          <FileCode className="size-3 shrink-0" />
+          <span className="truncate">{baseName}</span>
+        </button>
       ) : null}
     </div>
   )

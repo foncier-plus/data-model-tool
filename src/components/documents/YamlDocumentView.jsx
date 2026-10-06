@@ -35,8 +35,9 @@ export function YamlDocumentView({ fileName }) {
   const tree = useProjectStore((state) => state.tree)
   const applySource = useProjectStore((state) => state.applySource)
   const reveal = useProjectStore((state) => state.reveal)
-  const [text, setText] = useState(() => file?.content ?? '')
-  const lastApplied = useRef(file?.content ?? '')
+  const storedContent = file?.content ?? ''
+  const [text, setText] = useState(() => storedContent)
+  const lastApplied = useRef(storedContent)
   const viewRef = useRef(null)
   const [viewReady, setViewReady] = useState(false)
 
@@ -51,6 +52,15 @@ export function YamlDocumentView({ fileName }) {
     },
     [applySource, fileName],
   )
+
+  // Keep the editor in sync when the file content is updated elsewhere
+  // (e.g. an object/group/attribute property edited from the side panel),
+  // so a semi-manual edit never applies a stale document.
+  useEffect(() => {
+    if (storedContent === lastApplied.current) return
+    lastApplied.current = storedContent
+    setText(storedContent)
+  }, [storedContent])
 
   useEffect(() => {
     if (text === lastApplied.current) return undefined

@@ -10,15 +10,17 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { useTranslation } from '@/lib/i18n'
 import { useProjectStore } from '@/lib/store/useProjectStore'
 
 const KINDS = [
-  { value: 'object', label: 'Objet YAML', placeholder: 'mon_objet' },
-  { value: 'markdown', label: 'Document Markdown', placeholder: 'guide' },
-  { value: 'folder', label: 'Répertoire', placeholder: 'sous-dossier' },
+  { value: 'object', labelKey: 'new.object', placeholder: 'mon_objet' },
+  { value: 'markdown', labelKey: 'new.markdown', placeholder: 'guide' },
+  { value: 'folder', labelKey: 'new.folder', placeholder: 'sous-dossier' },
 ]
 
 export function NewEntryDialog({ target, onClose }) {
+  const { t } = useTranslation()
   const createObject = useProjectStore((state) => state.createObject)
   const createDocument = useProjectStore((state) => state.createDocument)
   const createFolder = useProjectStore((state) => state.createFolder)
@@ -58,12 +60,14 @@ export function NewEntryDialog({ target, onClose }) {
     >
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Nouveau</DialogTitle>
-          <DialogDescription>{target?.dirPath ? `Dans ${target.dirPath}` : 'À la racine'}</DialogDescription>
+          <DialogTitle>{t('new.title')}</DialogTitle>
+          <DialogDescription>
+            {target?.dirPath ? t('new.inDir', { path: target.dirPath }) : t('new.atRoot')}
+          </DialogDescription>
         </DialogHeader>
 
         <div className="flex flex-col gap-2">
-          <Label className="text-xs text-muted-foreground">Type</Label>
+          <Label className="text-xs text-muted-foreground">{t('new.type')}</Label>
           <div className="flex gap-1 rounded-md border p-1">
             {KINDS.map((item) => (
               <button
@@ -74,12 +78,12 @@ export function NewEntryDialog({ target, onClose }) {
                   kind === item.value ? 'bg-primary text-primary-foreground' : 'hover:bg-accent'
                 }`}
               >
-                {item.label}
+                {t(item.labelKey)}
               </button>
             ))}
           </div>
 
-          <Label className="text-xs text-muted-foreground">Nom</Label>
+          <Label className="text-xs text-muted-foreground">{t('new.name')}</Label>
           <Input
             autoFocus
             value={name}
@@ -92,7 +96,7 @@ export function NewEntryDialog({ target, onClose }) {
 
           {kind === 'object' ? (
             <>
-              <Label className="text-xs text-muted-foreground">Namespace (optionnel)</Label>
+              <Label className="text-xs text-muted-foreground">{t('new.namespace')}</Label>
               <Input
                 value={namespace}
                 placeholder="sales.crm"
@@ -107,10 +111,10 @@ export function NewEntryDialog({ target, onClose }) {
 
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>
-            Annuler
+            {t('new.cancel')}
           </Button>
           <Button onClick={submit} disabled={!name.trim()}>
-            Créer
+            {t('new.create')}
           </Button>
         </DialogFooter>
       </DialogContent>

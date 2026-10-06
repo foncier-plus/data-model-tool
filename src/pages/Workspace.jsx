@@ -3,21 +3,17 @@ import { useTheme } from 'next-themes'
 import {
   AlertTriangle,
   BookText,
-  Info,
-  List,
+  Languages,
   Moon,
   PanelRightClose,
   PanelRightOpen,
-  Sigma,
   Sun,
   Workflow,
 } from 'lucide-react'
-import { AttributesPanel } from '@/components/panels/AttributesPanel'
 import { Breadcrumb } from '@/components/panels/Breadcrumb'
 import { ConflictDialog } from '@/components/ConflictDialog'
 import { ExplorerPanel } from '@/components/panels/ExplorerPanel'
 import { GraphView } from '@/components/graph/GraphView'
-import { FormulaPanel } from '@/components/panels/FormulaPanel'
 import { Inspector } from '@/components/panels/Inspector'
 import { DocumentView } from '@/components/documents/DocumentView'
 import { Button } from '@/components/ui/button'
@@ -29,35 +25,35 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { buildIndex, resolveRef, validateReferences } from '@/lib/model/refs'
 import { classifyFile } from '@/lib/fs/documentType'
+import { pluralKey, useTranslation } from '@/lib/i18n'
 import { useProjectStore } from '@/lib/store/useProjectStore'
 import { scopeMarkdownCss } from '@/lib/markdownCss'
 import { cn } from '@/lib/utils'
 
 const VIEWS = [
-  { value: 'documentation', label: 'Documentation', icon: BookText },
-  { value: 'data-model', label: 'Data model', icon: Workflow },
+  { value: 'documentation', labelKey: 'view.documentation', icon: BookText },
+  { value: 'data-model', labelKey: 'view.dataModel', icon: Workflow },
 ]
 
 function IssuesDialog({ issues, onSelectIssue, className }) {
+  const { t, language } = useTranslation()
   const [open, setOpen] = useState(false)
+  const countLabel = t(pluralKey(language, 'issues', issues.length), { count: issues.length })
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button variant="outline" size="sm" disabled={issues.length === 0} className={className}>
           <AlertTriangle />
-          {issues.length} problème{issues.length > 1 ? 's' : ''}
+          {countLabel}
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Problèmes du modèle</DialogTitle>
-          <DialogDescription>
-            Références non résolues, doublons, auto-références et cycles.
-          </DialogDescription>
+          <DialogTitle>{t('issues.title')}</DialogTitle>
+          <DialogDescription>{t('issues.description')}</DialogDescription>
         </DialogHeader>
         <div className="flex max-h-[60vh] flex-col gap-1 overflow-auto">
           {issues.map((issue, index) => (
@@ -82,13 +78,14 @@ function IssuesDialog({ issues, onSelectIssue, className }) {
 
 function ThemeToggle({ className }) {
   const { resolvedTheme, setTheme } = useTheme()
+  const { t } = useTranslation()
   const dark = resolvedTheme === 'dark'
   return (
     <Button
       variant="ghost"
       size="icon"
       className={className}
-      title={dark ? 'Thème clair' : 'Thème sombre'}
+      title={dark ? t('theme.light') : t('theme.dark')}
       onClick={() => setTheme(dark ? 'light' : 'dark')}
     >
       {dark ? <Sun /> : <Moon />}
@@ -96,14 +93,29 @@ function ThemeToggle({ className }) {
   )
 }
 
+function LanguageToggle({ className }) {
+  const { language, t } = useTranslation()
+  const setLanguage = useProjectStore((state) => state.setLanguage)
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      className={className}
+      title={t('language.toggle')}
+      onClick={() => setLanguage(language === 'fr' ? 'en' : 'fr')}
+    >
+      <Languages />
+    </Button>
+  )
+}
+
 export default function Workspace() {
+  const { t } = useTranslation()
   const entries = useProjectStore((state) => state.entries)
   const activeFile = useProjectStore((state) => state.activeFile)
   const activeView = useProjectStore((state) => state.activeView)
   const setActiveView = useProjectStore((state) => state.setActiveView)
   const selection = useProjectStore((state) => state.selection)
-  const panelTab = useProjectStore((state) => state.panelTab)
-  const setPanelTab = useProjectStore((state) => state.setPanelTab)
   const select = useProjectStore((state) => state.select)
   const notebookName = useProjectStore((state) => state.notebookName)
   const markdownCss = useProjectStore((state) => state.markdownCss)
@@ -130,8 +142,6 @@ export default function Workspace() {
   const index = useMemo(() => buildIndex(entries), [entries])
   const issues = useMemo(() => validateReferences(entries), [entries])
 
-  const selectionKind = selection?.kind ?? null
-  const showAttributes = selectionKind === 'object' || selectionKind === 'group'
   const activeIsYaml = activeFile ? classifyFile(activeFile) === 'yaml' : false
   const showInspector =
     activeView === 'data-model' || (activeView === 'documentation' && activeIsYaml)
@@ -169,7 +179,7 @@ export default function Workspace() {
       <header className="relative z-20 flex h-14 shrink-0 items-center gap-4 border-b border-slate-800 bg-slate-900 px-4 text-slate-100">
         <button
           type="button"
-          title="Changer de notebook"
+          title={t('app.changeNotebook')}
           onClick={closeNotebook}
           className="flex min-w-0 items-center gap-2.5 rounded-lg px-1.5 py-1 text-left hover:bg-white/10"
         >
@@ -178,7 +188,7 @@ export default function Workspace() {
           </span>
           <div className="min-w-0 leading-tight">
             <div className="truncate text-sm font-semibold">Data Flow</div>
-            <div className="truncate text-xs text-slate-400">{notebookName ?? 'Notebook'}</div>
+            <div className="truncate text-xs text-slate-400">{notebookName ?? t('app.notebook')}</div>
           </div>
         </button>
 
@@ -200,7 +210,7 @@ export default function Workspace() {
                   )}
                 >
                   <Icon className="size-4" />
-                  {view.label}
+                  {t(view.labelKey)}
                 </button>
               )
             })}
@@ -214,12 +224,13 @@ export default function Workspace() {
             className="border-white/20 bg-white/5 text-slate-100 hover:bg-white/10 hover:text-white"
           />
           <ThemeToggle className="text-slate-200 hover:bg-white/10 hover:text-white" />
+          <LanguageToggle className="text-slate-200 hover:bg-white/10 hover:text-white" />
           {showInspector ? (
             <Button
               variant="ghost"
               size="icon"
               className="text-slate-200 hover:bg-white/10 hover:text-white"
-              title={collapsed ? "Afficher l'inspecteur" : "Masquer l'inspecteur"}
+              title={t(collapsed ? 'panel.show' : 'panel.hide')}
               onClick={() => setCollapsed((value) => !value)}
             >
               {collapsed ? <PanelRightOpen /> : <PanelRightClose />}
@@ -277,44 +288,12 @@ export default function Workspace() {
 
             <aside
               style={{ width: panelWidth }}
-              className="flex h-full min-h-0 shrink-0 flex-col overflow-hidden border-l bg-sidebar"
+              className="sidebar-panel flex h-full min-h-0 shrink-0 flex-col overflow-hidden border-l bg-sidebar"
             >
               <Breadcrumb selection={selection} />
-              <Tabs
-                value={panelTab}
-                onValueChange={setPanelTab}
-                className="min-h-0 flex-1 flex-col gap-0"
-              >
-                <div className="border-b bg-muted/50 px-3 py-2">
-                  <TabsList className="w-full">
-                    <TabsTrigger value="edit" className="flex-1 text-xs">
-                      <Info className="size-3.5" />
-                      Fiche
-                    </TabsTrigger>
-                    {showAttributes ? (
-                      <TabsTrigger value="attributes" className="flex-1 text-xs">
-                        <List className="size-3.5" />
-                        Attributs
-                      </TabsTrigger>
-                    ) : null}
-                    {showAttributes ? (
-                      <TabsTrigger value="formula" className="flex-1 text-xs">
-                        <Sigma className="size-3.5" />
-                        Formules
-                      </TabsTrigger>
-                    ) : null}
-                  </TabsList>
-                </div>
-                <TabsContent value="edit" className="m-0 min-h-0 flex-1">
-                  <Inspector entries={entries} selection={selection} />
-                </TabsContent>
-                <TabsContent value="attributes" className="m-0 min-h-0 flex-1">
-                  <AttributesPanel entries={entries} selection={selection} />
-                </TabsContent>
-                <TabsContent value="formula" className="m-0 min-h-0 flex-1">
-                  <FormulaPanel entries={entries} selection={selection} index={index} />
-                </TabsContent>
-              </Tabs>
+              <div className="min-h-0 flex-1">
+                <Inspector entries={entries} selection={selection} />
+              </div>
             </aside>
           </>
         ) : null}

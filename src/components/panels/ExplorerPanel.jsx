@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import { NewEntryDialog } from '@/components/NewEntryDialog'
 import { fileVisual, FOLDER_TEXT } from '@/components/files/visuals'
+import { useTranslation } from '@/lib/i18n'
 import { useProjectStore } from '@/lib/store/useProjectStore'
 import { handlesFromDataTransfer } from '@/lib/fs/picker'
 import { cn } from '@/lib/utils'
@@ -73,16 +74,21 @@ function Menu({ menu, items, onClose }) {
   )
 }
 
-function creationItems(dirPath, onCreate) {
+function creationItems(dirPath, onCreate, t) {
   return [
-    { label: 'Répertoire', icon: Folder, onSelect: () => onCreate(dirPath, 'folder') },
+    { label: t('explorer.folder'), icon: Folder, onSelect: () => onCreate(dirPath, 'folder') },
     { separator: true },
-    { label: 'Fichier Markdown', icon: FileText, onSelect: () => onCreate(dirPath, 'markdown') },
-    { label: 'Fichier YAML', icon: Box, onSelect: () => onCreate(dirPath, 'object') },
+    {
+      label: t('explorer.markdown'),
+      icon: FileText,
+      onSelect: () => onCreate(dirPath, 'markdown'),
+    },
+    { label: t('explorer.yaml'), icon: Box, onSelect: () => onCreate(dirPath, 'object') },
   ]
 }
 
 function TreeNode({ node, onCreate, depth = 0 }) {
+  const { t } = useTranslation()
   const activeFile = useProjectStore((state) => state.activeFile)
   const openFile = useProjectStore((state) => state.openFile)
   const movePath = useProjectStore((state) => state.movePath)
@@ -136,29 +142,33 @@ function TreeNode({ node, onCreate, depth = 0 }) {
   }
 
   const items = [
-    ...creationItems(node.path, onCreate),
+    ...creationItems(node.path, onCreate, t),
     ...(isDirectory
       ? [
           { separator: true },
-          { label: 'Renommer', icon: Pencil, onSelect: startRename },
+          { label: t('explorer.rename'), icon: Pencil, onSelect: startRename },
           {
-            label: 'Supprimer',
+            label: t('explorer.delete'),
             icon: Trash2,
             danger: true,
             onSelect: () => {
-              if (window.confirm(`Supprimer « ${node.path} » et son contenu ?`)) deletePath(node.path)
+              if (window.confirm(t('explorer.deleteFolderConfirm', { path: node.path }))) {
+                deletePath(node.path)
+              }
             },
           },
         ]
       : [
           { separator: true },
-          { label: 'Renommer', icon: Pencil, onSelect: startRename },
+          { label: t('explorer.rename'), icon: Pencil, onSelect: startRename },
           {
-            label: 'Supprimer',
+            label: t('explorer.delete'),
             icon: Trash2,
             danger: true,
             onSelect: () => {
-              if (window.confirm(`Supprimer « ${node.path} » ?`)) deletePath(node.path)
+              if (window.confirm(t('explorer.deleteConfirm', { path: node.path }))) {
+                deletePath(node.path)
+              }
             },
           },
         ]),
@@ -233,7 +243,11 @@ function TreeNode({ node, onCreate, depth = 0 }) {
         >
           <button
             type="button"
-            aria-label={expanded ? `Replier ${node.name}` : `Déplier ${node.name}`}
+            aria-label={
+              expanded
+                ? t('namespace.collapse', { name: node.name })
+                : t('namespace.expand', { name: node.name })
+            }
             onClick={(event) => {
               event.stopPropagation()
               setExpanded((value) => !value)
@@ -251,7 +265,9 @@ function TreeNode({ node, onCreate, depth = 0 }) {
                 <TreeNode key={child.path} node={child} onCreate={onCreate} depth={depth + 1} />
               ))
             ) : (
-              <span className="px-1 py-0.5 text-[10px] text-muted-foreground">Vide</span>
+              <span className="px-1 py-0.5 text-[10px] text-muted-foreground">
+                {t('explorer.emptyFolder')}
+              </span>
             )}
           </div>
         ) : null}
@@ -293,6 +309,7 @@ function TreeNode({ node, onCreate, depth = 0 }) {
 }
 
 export function ExplorerPanel({ width = 280 }) {
+  const { t } = useTranslation()
   const tree = useProjectStore((state) => state.tree)
   const refresh = useProjectStore((state) => state.refresh)
   const movePath = useProjectStore((state) => state.movePath)
@@ -339,9 +356,7 @@ export function ExplorerPanel({ width = 280 }) {
         onDrop={rootDrop}
       >
         {children.length === 0 ? (
-          <p className="p-3 text-xs text-muted-foreground">
-            Notebook vide. Créez un fichier ou déposez des éléments.
-          </p>
+          <p className="p-3 text-xs text-muted-foreground">{t('explorer.empty')}</p>
         ) : (
           children.map((node) => <TreeNode key={node.path} node={node} onCreate={onCreate} />)
         )}
@@ -350,9 +365,9 @@ export function ExplorerPanel({ width = 280 }) {
       <Menu
         menu={menu}
         items={[
-          ...creationItems('', onCreate),
+          ...creationItems('', onCreate, t),
           { separator: true },
-          { label: 'Rafraîchir', icon: RefreshCw, onSelect: refresh },
+          { label: t('explorer.refresh'), icon: RefreshCw, onSelect: refresh },
         ]}
         onClose={() => setMenu(null)}
       />

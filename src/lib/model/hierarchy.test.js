@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildVisibleGraph,
   filterObjectIds,
+  namespaceLabel,
   namespaceParent,
   namespacePrefixes,
   nearestCollapsedAncestor,
@@ -28,6 +29,8 @@ describe('namespace helpers', () => {
     expect(namespacePrefixes('a.b.c')).toEqual(['a', 'a.b', 'a.b.c'])
     expect(namespaceParent('a.b.c')).toBe('a.b')
     expect(namespaceParent('a')).toBeNull()
+    expect(namespaceLabel('a.b.c')).toBe('c')
+    expect(namespaceLabel('a')).toBe('a')
   })
 
   it('finds the nearest collapsed ancestor', () => {
@@ -96,6 +99,11 @@ describe('filterObjectIds', () => {
   it('keeps the selection and adds its dependencies', () => {
     const ids = filterObjectIds(GRAPH, new Set(['c']))
     expect([...ids].sort()).toEqual(['a.x', 'a.y', 'c'])
+  })
+
+  it('adds child objects when requested', () => {
+    const ids = filterObjectIds(GRAPH, new Set(['a.x']), { children: true })
+    expect([...ids].sort()).toEqual(['a.b.z', 'a.x', 'c'])
   })
 
   it('returns null when there is no filter', () => {

@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { Handle, Position } from '@xyflow/react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import {
   AlertTriangle,
   ChevronDown,
@@ -10,7 +12,9 @@ import {
   Sigma,
 } from 'lucide-react'
 import { attributeRef, groupRef, originKind, resolveRef } from '@/lib/model/refs'
+import { useTranslation } from '@/lib/i18n'
 import { useProjectStore } from '@/lib/store/useProjectStore'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { AboutLink } from '@/components/wiki/RichText'
 import { typeStyle, withAlpha } from '@/lib/colors'
 import { cn } from '@/lib/utils'
@@ -69,7 +73,9 @@ function Row({
   noTarget,
   noSource,
   onClick,
+  description,
 }) {
+  const { t } = useTranslation()
   const stateClass = rowStateClass({ active, upstream, downstream, hasHighlight, dim })
 
   return (
@@ -84,59 +90,68 @@ function Row({
         />
       ) : null}
 
-      <button
-        type="button"
-        className={cn(
-          'grid w-full grid-cols-[16px_minmax(0,1fr)_auto_auto] items-center gap-2 rounded px-1.5 py-0.5 text-left text-[11px] hover:bg-accent',
-          stateClass,
-        )}
-        onClick={(event) => {
-          event.stopPropagation()
-          onClick()
-        }}
-      >
-        <span
-          className={cn(
-            'flex size-4 items-center justify-center rounded-sm',
-            kind === 'formula' ? 'bg-blue-400' : kind === 'linked' ? 'bg-emerald-400' : 'bg-zinc-200',
-          )}
-          title={
-            kind === 'formula'
-              ? 'Attribut calculé (formule)'
-              : kind === 'linked'
-                ? 'Attribut lié (sans formule)'
-                : 'Attribut simple'
-          }
-        >
-          {kind === 'formula' ? (
-            <Sigma className="size-2.5 text-white" />
-          ) : kind === 'linked' ? (
-            <Equal className="size-2.5 text-white" />
-          ) : (
-            <Pencil className="size-2.5 text-zinc-400" />
-          )}
-        </span>
-        <span className="flex min-w-0 flex-col">
-          <span
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
             className={cn(
-              'truncate font-mono',
-              optional ? 'font-normal italic' : 'font-bold',
-              warning && 'text-destructive',
+              'grid w-full grid-cols-[16px_minmax(0,1fr)_auto_auto] items-center gap-2 rounded px-1.5 py-0.5 text-left text-[11px] hover:bg-accent',
+              stateClass,
             )}
+            onClick={(event) => {
+              event.stopPropagation()
+              onClick()
+            }}
           >
-            {label}
-          </span>
-          {example ? (
-            <span className="truncate text-[10px] italic text-muted-foreground">{example}</span>
-          ) : null}
-        </span>
-        {warning ? <AlertTriangle className="size-3 text-destructive" /> : <span />}
-        {type ? (
-          <span className={cn('rounded px-1 font-mono text-[10px]', typeStyle(type))}>{type}</span>
-        ) : (
-          <span />
-        )}
-      </button>
+            <span
+              className={cn(
+                'flex size-4 items-center justify-center rounded-sm',
+                kind === 'formula' ? 'bg-blue-400' : kind === 'linked' ? 'bg-emerald-400' : 'bg-zinc-200',
+              )}
+              title={
+                kind === 'formula'
+                  ? t('attribute.formula')
+                  : kind === 'linked'
+                    ? t('attribute.linked')
+                    : t('attribute.simple')
+              }
+            >
+              {kind === 'formula' ? (
+                <Sigma className="size-2.5 text-white" />
+              ) : kind === 'linked' ? (
+                <Equal className="size-2.5 text-white" />
+              ) : (
+                <Pencil className="size-2.5 text-zinc-400" />
+              )}
+            </span>
+            <span className="flex min-w-0 flex-col">
+              <span
+                className={cn(
+                  'truncate font-mono',
+                  optional ? 'font-normal italic' : 'font-bold',
+                  warning && 'text-destructive',
+                )}
+              >
+                {label}
+              </span>
+              {example ? (
+                <span className="truncate text-[10px] italic text-muted-foreground">{example}</span>
+              ) : null}
+            </span>
+            {warning ? <AlertTriangle className="size-3 text-destructive" /> : <span />}
+            {type ? (
+              <span className={cn('rounded px-1 font-mono text-[10px]', typeStyle(type))}>{type}</span>
+            ) : (
+              <span />
+            )}
+          </button>
+        </TooltipTrigger>
+        {description ? (
+          <TooltipContent side="right" className="max-w-72 whitespace-pre-wrap font-normal">
+            {description}
+          </TooltipContent>
+        ) : null}
+      </Tooltip>
 
       {edgeMode === 'attribute' && !noSource ? (
         <Handle
@@ -152,6 +167,7 @@ function Row({
 }
 
 export function EntityNode({ data }) {
+  const { t } = useTranslation()
   const select = useProjectStore((state) => state.select)
   const revealSelection = useProjectStore((state) => state.revealSelection)
   const openFile = useProjectStore((state) => state.openFile)
@@ -172,6 +188,7 @@ export function EntityNode({ data }) {
     color,
     highlighted,
     dimmed,
+    external = false,
     selectedRef,
     edgeMode,
     upstreamRefs,
@@ -260,7 +277,7 @@ export function EntityNode({ data }) {
     else setManualCollapsed(update)
   }
 
-  const rowProps = (ref, label, type, optional, example, kind, warning, onClick) => ({
+  const rowProps = (ref, label, type, optional, example, kind, warning, onClick, description) => ({
     ref,
     label,
     type,
@@ -278,6 +295,7 @@ export function EntityNode({ data }) {
     noTarget: isInput,
     noSource: isOutput,
     onClick,
+    description,
   })
 
   const showRootGroup = data.rootGroup ?? false
@@ -304,6 +322,7 @@ export function EntityNode({ data }) {
               attributeName: attribute.name,
               ref,
             }),
+          attribute.description,
         )}
       />
     )
@@ -324,6 +343,7 @@ export function EntityNode({ data }) {
             : objectSelected
               ? color
               : withAlpha(color, 0.55),
+        opacity: dimmed && !objectSelected ? 0.3 : external && !objectSelected ? 0.7 : undefined,
       }}
     >
       {edgeMode === 'aggregated' && !isInput ? (
@@ -378,8 +398,8 @@ export function EntityNode({ data }) {
       </div>
 
       {model.description ? (
-        <div className="px-2 pt-1 text-[10px] leading-4 break-words text-muted-foreground">
-          {model.description}
+        <div className="px-2 pt-1 text-[10px] leading-4 break-words text-muted-foreground [&_a]:text-primary [&_a]:underline [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_code]:text-[10px] [&_em]:italic [&_h1]:mt-1 [&_h1]:text-xs [&_h2]:mt-1 [&_h2]:text-xs [&_h3]:mt-1 [&_h3]:text-[10px] [&_h4]:mt-0.5 [&_h4]:text-[10px] [&_li]:my-0 [&_ol]:my-0.5 [&_ol]:list-decimal [&_ol]:pl-4 [&_p]:my-0.5 [&_pre]:my-1 [&_pre]:overflow-auto [&_pre]:rounded [&_pre]:bg-muted [&_pre]:p-1 [&_strong]:font-semibold [&_ul]:my-0.5 [&_ul]:list-disc [&_ul]:pl-4">
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{model.description}</ReactMarkdown>
         </div>
       ) : null}
 
@@ -387,13 +407,13 @@ export function EntityNode({ data }) {
         <div className="flex flex-col gap-0.5 border-b border-red-300 bg-red-50 px-2 py-1 text-[10px] text-red-700 dark:border-red-800 dark:bg-red-950/40 dark:text-red-300">
           <span className="flex items-center gap-1 font-semibold">
             <AlertTriangle className="size-3" />
-            Conflit : objet déclaré plusieurs fois
+            {t('entity.conflict')}
           </span>
           {data.files.map((file) => (
             <button
               key={file}
               type="button"
-              title={`Ouvrir ${file}`}
+              title={t('entity.openFile', { file })}
               className="truncate text-left underline underline-offset-2"
               onClick={(event) => {
                 event.stopPropagation()
@@ -476,29 +496,41 @@ export function EntityNode({ data }) {
                   onClick={() => toggleGroup(ref)}
                   label={group.name}
                 />
-                <button
-                  type="button"
-                  className="flex h-6 min-w-0 flex-1 items-center gap-1.5 pr-1 text-left text-[11px] font-medium hover:brightness-95"
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    activate({
-                      kind: 'group',
-                      objectName: qualifiedName,
-                      groupName: group.name,
-                      attributeName: null,
-                      ref,
-                    })
-                  }}
-                >
-                  <span className="truncate">{group.name}</span>
-                  <span className="flex-1" />
-                  <span className="text-[10px] font-normal text-muted-foreground">
-                    {group.attributes?.length ?? 0}
-                  </span>
-                  {isUnresolved(group.origin, index, namespace) ? (
-                    <AlertTriangle className="size-3 shrink-0 text-destructive" />
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      className="flex h-6 min-w-0 flex-1 items-center gap-1.5 pr-1 text-left text-[11px] font-medium hover:brightness-95"
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        activate({
+                          kind: 'group',
+                          objectName: qualifiedName,
+                          groupName: group.name,
+                          attributeName: null,
+                          ref,
+                        })
+                      }}
+                    >
+                      <span className="truncate">{group.name}</span>
+                      <span className="flex-1" />
+                      <span className="text-[10px] font-normal text-muted-foreground">
+                        {group.attributes?.length ?? 0}
+                      </span>
+                      {isUnresolved(group.origin, index, namespace) ? (
+                        <AlertTriangle className="size-3 shrink-0 text-destructive" />
+                      ) : null}
+                    </button>
+                  </TooltipTrigger>
+                  {group.description ? (
+                    <TooltipContent
+                      side="right"
+                      className="max-w-72 whitespace-pre-wrap font-normal"
+                    >
+                      {group.description}
+                    </TooltipContent>
                   ) : null}
-                </button>
+                </Tooltip>
               </div>
 
               {isCollapsed ? null : (
@@ -528,6 +560,7 @@ export function EntityNode({ data }) {
                               attributeName: attribute.name,
                               ref: attributeRefValue,
                             }),
+                          attribute.description,
                         )}
                       />
                     )
@@ -544,6 +577,17 @@ export function EntityNode({ data }) {
           type="source"
           position={Position.Right}
           className="!size-2 !border-0"
+          style={{ top: 16, background: color }}
+        />
+      ) : null}
+
+      {edgeMode === 'attribute' ? (
+        <Handle
+          type="source"
+          position={Position.Right}
+          id={qualifiedName}
+          isConnectable={false}
+          className="!size-1.5 !border-0"
           style={{ top: 16, background: color }}
         />
       ) : null}

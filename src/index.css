@@ -216,6 +216,37 @@
   }
 }
 
+/* Side-panel form fields sit on a white surface rather than the default gray. */
+.editor-fields input,
+.editor-fields textarea,
+.editor-fields [role="combobox"] {
+  background-color: var(--card);
+  border: 1px solid var(--border);
+}
+
+/* Single-line fields share one height and symmetric padding so labels align. */
+.editor-fields input,
+.editor-fields [role="combobox"] {
+  height: 1.75rem;
+  padding: 0 0.5rem;
+}
+
+.editor-fields textarea {
+  padding: 0.375rem 0.5rem;
+}
+
+/* Force long text in the side panel to wrap instead of overflowing. */
+.sidebar-panel {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.sidebar-panel pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

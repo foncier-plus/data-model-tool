@@ -14,8 +14,10 @@ import {
   addAttribute,
   addGroup,
   moveAttribute,
+  moveGroup,
   removeAttribute,
   removeGroup,
+  reorderAttribute,
   setAttributeField,
   setGroupField,
   setObjectField,
@@ -27,6 +29,14 @@ import { clearHandle, loadHandle, saveHandle } from '@/lib/fs/handleStore.js'
 
 const SAVE_DELAY = 500
 const saveTimers = new Map()
+
+function loadLanguage() {
+  try {
+    return window.localStorage.getItem('data-flow.language') === 'en' ? 'en' : 'fr'
+  } catch {
+    return 'fr'
+  }
+}
 
 function collectYamlPaths(node, paths = []) {
   for (const child of node.children ?? []) {
@@ -156,8 +166,9 @@ export const useProjectStore = create((set, get) => {
     const entries = file.docs.map((doc, docIndex) =>
       parseObjectDocument(file.fileName, doc, docIndex),
     )
+    const content = serializeObjects(file.docs)
     const files = get().files.map((item) =>
-      item.fileName === file.fileName ? { ...item, entries, dirty: true } : item,
+      item.fileName === file.fileName ? { ...item, entries, content, dirty: true } : item,
     )
     set({
       files,
@@ -184,6 +195,7 @@ export const useProjectStore = create((set, get) => {
     docRevision: 0,
     selection: null,
     panelTab: 'edit',
+    language: loadLanguage(),
     status: 'idle',
     message: null,
     conflict: null,
@@ -258,8 +270,26 @@ export const useProjectStore = create((set, get) => {
     },
     clearSelection: () => set({ selection: null }),
     setPanelTab: (panelTab) => set({ panelTab }),
+    setLanguage: (language) => {
+      const next = language === 'en' ? 'en' : 'fr'
+      try {
+        window.localStorage.setItem('data-flow.language', next)
+      } catch {
+        // ignore (private mode / quota)
+      }
+      set({ language: next })
+    },
     setActiveView: (activeView) => set({ activeView }),
-    openFile: (activeFile) => set({ activeFile, activeView: 'documentation', anchor: null, reveal: null }),
+    openFile: (activeFile) => {
+      const first = get().entries.find((entry) => entry.fileName === activeFile)
+      set({
+        activeFile,
+        activeView: 'documentation',
+        anchor: null,
+        reveal: null,
+        ...(first ? { selection: toSelection('object', first.qualifiedName) } : {}),
+      })
+    },
     openWikiLink: async (yamlFileName, path, section = '') => {
       const resolved = resolveWikiPath(yamlFileName, path)
       if (!resolved) return
@@ -431,9 +461,6 @@ export const useProjectStore = create((set, get) => {
       applyToDoc(entryId, (doc) => {
         createdIndex = addGroup(doc, name)
       })
-      const entry = findEntry(get().entries, entryId)
-      const group = createdIndex === null ? null : entry?.model?.groups?.[createdIndex]
-      if (entry && group) set({ selection: toSelection('group', entryId, group.name) })
       return createdIndex
     },
 
@@ -447,21 +474,16 @@ export const useProjectStore = create((set, get) => {
       }
     },
 
+    moveGroup: (entryId, fromIndex, toIndex) => {
+      if (fromIndex === toIndex) return
+      applyToDoc(entryId, (doc) => moveGroup(doc, fromIndex, toIndex))
+    },
+
     addAttribute: (entryId, groupIndex = null, name) => {
       let createdIndex = null
       applyToDoc(entryId, (doc) => {
         createdIndex = addAttribute(doc, groupIndex, name)
       })
-      const entry = findEntry(get().entries, entryId)
-      if (entry?.model && createdIndex !== null) {
-        const group = groupIndex === null ? null : entry.model.groups?.[groupIndex]
-        const createdName = group
-          ? group.attributes?.[createdIndex]?.name
-          : entry.model.attributes?.[createdIndex]?.name
-        if (createdName) {
-          set({ selection: toSelection('attribute', entryId, group?.name ?? null, createdName) })
-        }
-      }
       return createdIndex
     },
 
@@ -485,34 +507,38 @@ export const useProjectStore = create((set, get) => {
     },
 
     moveAttribute: (entryId, groupIndex, attributeIndex, toGroupIndex) => {
+      const entry = findEntry(get().entries, entryId)
+      const model = entry?.model
+      const sourceGroup = groupIndex === null ? null : model?.groups?.[groupIndex]
+      const attribute = sourceGroup
+        ? sourceGroup.attributes?.[attributeIndex]
+        : model?.attributes?.[attributeIndex]
+      const name = attribute?.name
       applyToDoc(entryId, (doc) =>
         moveAttribute(doc, groupIndex, attributeIndex, toGroupIndex),
       )
-    },
-
-    moveAttributeToGroup: (entryId, groupIndex, attributeIndex, targetGroupName) => {
-      const entry = findEntry(get().entries, entryId)
-      const model = entry?.model
-      if (!model) return
-      const group = groupIndex === null ? null : model.groups?.[groupIndex]
-      const attribute = group
-        ? group.attributes?.[attributeIndex]
-        : model.attributes?.[attributeIndex]
-      if (!attribute) return
-      const name = (targetGroupName ?? '').trim()
-      const existing = name ? model.groups.findIndex((item) => item.name === name) : -1
-      let targetIndex = existing >= 0 ? existing : null
-      applyToDoc(entryId, (doc) => {
-        if (name && targetIndex === null) targetIndex = addGroup(doc, name)
-        moveAttribute(doc, groupIndex, attributeIndex, name ? targetIndex : null)
-      })
-      const updated = findEntry(get().entries, entryId)
-      const targetGroup = targetIndex === null ? null : updated?.model?.groups?.[targetIndex]
-      if (updated?.model) {
+      if (!name) return
+      // Moving an attribute must not open its editor: stay in the parent
+      // element. Only remap when the moved attribute itself was selected.
+      const selection = get().selection
+      if (
+        selection &&
+        selection.kind === 'attribute' &&
+        selection.objectName === entryId &&
+        selection.groupName === (sourceGroup?.name ?? null) &&
+        selection.attributeName === name
+      ) {
         set({
-          selection: toSelection('attribute', entryId, targetGroup?.name ?? null, attribute.name),
+          selection: sourceGroup
+            ? toSelection('group', entryId, sourceGroup.name)
+            : toSelection('object', entryId),
         })
       }
+    },
+
+    reorderAttribute: (entryId, groupIndex, fromIndex, toIndex) => {
+      if (fromIndex === toIndex) return
+      applyToDoc(entryId, (doc) => reorderAttribute(doc, groupIndex, fromIndex, toIndex))
     },
 
     linkAttributes: (sourceRef, targetRef) => {

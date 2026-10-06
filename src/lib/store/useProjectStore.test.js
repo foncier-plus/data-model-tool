@@ -69,6 +69,23 @@ describe('project store with a notebook', () => {
     expect(content).toContain('name: client_import')
   })
 
+  it('updates the file content as soon as a field is edited', async () => {
+    await useProjectStore.getState().openNotebook(notebook)
+    const contentOf = () =>
+      useProjectStore
+        .getState()
+        .files.find((file) => file.fileName === 'sales/model.yaml').content
+    const before = contentOf()
+
+    useProjectStore.getState().setObjectField('sales.client', 'description', 'Client final')
+
+    const after = contentOf()
+    expect(after).not.toBe(before)
+    expect(after).toContain('description: Client final')
+    expect(after).toContain('name: client_import')
+    await useProjectStore.getState().flush('sales/model.yaml')
+  })
+
   it('replaces a file from source text', async () => {
     await useProjectStore.getState().openNotebook(notebook)
     const result = useProjectStore

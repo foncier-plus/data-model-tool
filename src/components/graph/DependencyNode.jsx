@@ -23,6 +23,7 @@ export function DependencyNode({ data }) {
       <Handle
         type="source"
         position={Position.Right}
+        id={data.qualifiedName}
         className="!size-1.5 !border-0"
         style={{ background: data.color }}
       />

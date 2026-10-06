@@ -8,18 +8,22 @@ function addTo(map, id, factory) {
   return created
 }
 
-// Resolve the owning object of a reference. Falls back to the longest
-// resolvable prefix so object-level links still work when the exact
-// attribute name is missing (e.g. "NS1.ObjectBeta.beta1" -> "NS1.ObjectBeta").
-function resolveOriginObject(ref, index, namespace) {
+// Resolve a reference to an element, falling back to the longest resolvable
+// prefix. A reference that only names an object (no attribute) resolves to the
+// object element so attributes computed from it can be linked to that object.
+function resolveOriginElement(ref, index, namespace) {
   const direct = resolveRef(ref, index, namespace)
-  if (direct) return direct.objectName
+  if (direct) return direct
   const parts = ref.split('.')
   for (let length = parts.length - 1; length >= 1; length -= 1) {
     const hit = resolveRef(parts.slice(0, length).join('.'), index, namespace)
-    if (hit) return hit.objectName
+    if (hit) return hit
   }
   return null
+}
+
+function resolveOriginObject(ref, index, namespace) {
+  return resolveOriginElement(ref, index, namespace)?.objectName ?? null
 }
 
 export function buildObjectGraph(objects, index) {
@@ -101,9 +105,12 @@ export function buildAttributeEdges(objects, index) {
 
     const handle = (origin, targetRef) => {
       for (const ref of origin.from ?? []) {
-        const resolved = resolveRef(ref, index, entry.namespace ?? null)
-        if (!resolved || resolved.kind !== 'attribute') continue
-        if (!known.has(resolved.ref) || resolved.ref === targetRef) continue
+        const resolved = resolveOriginElement(ref, index, entry.namespace ?? null)
+        if (!resolved || resolved.ref === targetRef) continue
+        // An exact attribute reference links attribute-to-attribute; a
+        // reference that only names an object links the object itself to the
+        // computed attribute.
+        if (resolved.kind === 'attribute' && !known.has(resolved.ref)) continue
         const id = `${resolved.ref}->${targetRef}`
         const edge = addTo(edges, id, () => ({
           id,

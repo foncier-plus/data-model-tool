@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { AlertTriangle, Settings } from 'lucide-react'
+import { pluralKey, useTranslation } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 
 function Toggle({ label, checked, onChange }) {
@@ -29,10 +30,12 @@ function Section({ title, children }) {
 }
 
 export function GraphSettings({ settings, onChange, issueGroups = [], onSelectIssue }) {
+  const { t, language } = useTranslation()
   const [open, setOpen] = useState(false)
   const [issuesOpen, setIssuesOpen] = useState(false)
   const ref = useRef(null)
   const issueCount = issueGroups.reduce((total, group) => total + group.issues.length, 0)
+  const issueLabel = t(pluralKey(language, 'graph.issues', issueCount), { count: issueCount })
 
   useEffect(() => {
     if (!open && !issuesOpen) return undefined
@@ -52,8 +55,8 @@ export function GraphSettings({ settings, onChange, issueGroups = [], onSelectIs
         {issueCount > 0 ? (
           <button
             type="button"
-            title={`${issueCount} problème${issueCount > 1 ? 's' : ''} dans le graphe`}
-            aria-label="Problèmes du graphe"
+            title={issueLabel}
+            aria-label={t('graph.issues.title')}
             aria-expanded={issuesOpen}
             onClick={() => {
               setIssuesOpen((value) => !value)
@@ -70,7 +73,7 @@ export function GraphSettings({ settings, onChange, issueGroups = [], onSelectIs
         ) : null}
         <button
           type="button"
-          aria-label="Paramètres du graphe"
+          aria-label={t('settings.param')}
           aria-expanded={open}
           onClick={() => {
             setOpen((value) => !value)
@@ -88,7 +91,7 @@ export function GraphSettings({ settings, onChange, issueGroups = [], onSelectIs
       {issuesOpen ? (
         <div className="flex max-h-80 w-96 flex-col overflow-hidden rounded-lg border bg-background/95 shadow-lg backdrop-blur">
           <div className="border-b px-3 py-2 text-xs font-semibold">
-            Problèmes du graphe ({issueCount})
+            {t('graph.issues.title')} ({issueCount})
           </div>
           <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-auto p-2">
             {issueGroups.map((group) => (
@@ -124,29 +127,34 @@ export function GraphSettings({ settings, onChange, issueGroups = [], onSelectIs
 
       {open ? (
         <div className="flex w-60 flex-col gap-3 rounded-lg border bg-background/95 p-3 shadow-lg backdrop-blur">
-          <Section title="Groupes">
+          <Section title={t('settings.groups')}>
             <Toggle
-              label="Groupe racine"
+              label={t('settings.rootGroup')}
               checked={settings.rootGroup}
               onChange={(value) => onChange({ rootGroup: value })}
             />
             <Toggle
-              label="Repliement par défaut"
+              label={t('settings.autoCollapse')}
               checked={settings.autoCollapse}
               onChange={(value) => onChange({ autoCollapse: value })}
             />
           </Section>
 
-          <Section title="Relations">
+          <Section title={t('settings.relations')}>
             <Toggle
-              label="Relations entre les attributs"
+              label={t('settings.attributeRelations')}
               checked={settings.attributeRelations}
               onChange={(value) => onChange({ attributeRelations: value })}
             />
             <Toggle
-              label="Afficher les objets parents"
+              label={t('settings.showParents')}
               checked={settings.showParentObjects}
               onChange={(value) => onChange({ showParentObjects: value })}
+            />
+            <Toggle
+              label={t('settings.showChildren')}
+              checked={Boolean(settings.showChildObjects)}
+              onChange={(value) => onChange({ showChildObjects: value })}
             />
           </Section>
         </div>

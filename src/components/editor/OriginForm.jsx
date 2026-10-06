@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { attributeRef, groupRef } from '@/lib/model/refs'
+import { useTranslation } from '@/lib/i18n'
 
 function projectOf(entry) {
   return entry.namespace ? entry.namespace.split('.')[0] : null
@@ -37,6 +38,7 @@ function buildOptions(entries, project) {
 }
 
 export function OriginForm({ origin, onChange, resetKey, entries = [], namespace = null }) {
+  const { t } = useTranslation()
   const [sources, setSources] = useState(origin?.from ?? [])
   const [formula, setFormula] = useState(origin?.formula ?? '')
   const [draft, setDraft] = useState('')
@@ -54,6 +56,12 @@ export function OriginForm({ origin, onChange, resetKey, entries = [], namespace
 
   const commit = (nextSources, nextFormula) => {
     onChange({ from: nextSources, formula: nextFormula })
+  }
+
+  const updateSource = (index, value) => {
+    const next = sources.map((source, i) => (i === index ? value : source))
+    setSources(next)
+    commit(next, formula)
   }
 
   const addSource = () => {
@@ -81,8 +89,8 @@ export function OriginForm({ origin, onChange, resetKey, entries = [], namespace
   }
 
   return (
-    <div className="flex flex-col gap-3 border-t-1 pt-4">
-      <Label className="text-xs text-muted-foreground">Sources</Label>
+    <div className="flex flex-col gap-3 border-t pt-4">
+      <Label className="text-xs text-muted-foreground">{t('origin.sources')}</Label>
 
       <datalist id="origin-source-options">
         {refs.map((ref) => (
@@ -90,14 +98,33 @@ export function OriginForm({ origin, onChange, resetKey, entries = [], namespace
         ))}
       </datalist>
 
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-1">
+        {sources.map((source, index) => (
+          <div key={`${source}-${index}`} className="group flex items-center gap-1">
+            <Input
+              list="origin-source-options"
+              value={source}
+              className="h-7 min-w-0 flex-1"
+              onChange={(event) => updateSource(index, event.target.value)}
+            />
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-6 shrink-0 text-destructive opacity-0 group-hover:opacity-100"
+              title={t('origin.source.remove.title')}
+              onClick={() => removeSource(index)}
+            >
+              <Trash2 className="size-3.5" />
+            </Button>
+          </div>
+        ))}
 
-        <div className="flex items-center gap-2 rounded-md px-3 py-1 bg-black/3">
+        <div className="flex items-center gap-1">
           <Input
             list="origin-source-options"
             value={draft}
-            placeholder="object.attribute"
-            className="h-6 bg-transparent border-0 px-0 shadow-none focus-visible:ring-0"
+            placeholder={t('origin.source.add.placeholder')}
+            className="h-7 min-w-0 flex-1 font-normal italic placeholder:italic"
             onChange={(event) => setDraft(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === 'Enter') {
@@ -109,33 +136,18 @@ export function OriginForm({ origin, onChange, resetKey, entries = [], namespace
           <Button
             variant="ghost"
             size="icon"
-            className="size-6 text-emerald-600"
+            className="size-6 shrink-0 text-emerald-600"
+            title={t('origin.source.add.title')}
             disabled={!draft.trim()}
             onClick={addSource}
           >
             <Check className="size-3.5" />
           </Button>
         </div>
-
-        {sources.map((source, index) => (
-          <div key={`${source}-${index}`} className="flex items-center gap-2 rounded-md border px-2 py-1">
-            <code className="min-w-0 flex-1 truncate text-xs">
-              {shortRef(source, project)}
-            </code>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-6 text-destructive"
-              onClick={() => removeSource(index)}
-            >
-              <Trash2 className="size-3.5" />
-            </Button>
-          </div>
-        ))}
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <Label className="text-xs text-muted-foreground">Formula</Label>
+        <Label className="text-xs text-muted-foreground">{t('origin.formula')}</Label>
         <Textarea
           value={formula}
           rows={4}

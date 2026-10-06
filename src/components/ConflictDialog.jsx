@@ -7,9 +7,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { useTranslation } from '@/lib/i18n'
 import { useProjectStore } from '@/lib/store/useProjectStore'
 
 export function ConflictDialog() {
+  const { t } = useTranslation()
   const conflict = useProjectStore((state) => state.conflict)
   const reload = useProjectStore((state) => state.resolveConflictReload)
   const overwrite = useProjectStore((state) => state.resolveConflictOverwrite)
@@ -19,21 +21,19 @@ export function ConflictDialog() {
     <Dialog open={Boolean(conflict)} onOpenChange={(open) => (!open ? dismiss() : null)}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>File changed on disk</DialogTitle>
+          <DialogTitle>{t('conflict.title')}</DialogTitle>
           <DialogDescription>
-            <code>{conflict?.fileName}</code> was modified outside the app while you were
-            editing. Reload the file to keep the disk version, or overwrite it with your
-            in-app changes.
+            <code>{conflict?.fileName}</code> {t('conflict.description')}
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
           <Button variant="ghost" onClick={dismiss}>
-            Keep editing
+            {t('conflict.keepEditing')}
           </Button>
           <Button variant="outline" onClick={overwrite}>
-            Overwrite
+            {t('conflict.overwrite')}
           </Button>
-          <Button onClick={reload}>Reload from disk</Button>
+          <Button onClick={reload}>{t('conflict.reload')}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
