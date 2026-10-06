@@ -1,5 +1,6 @@
 import {
   Box,
+  Boxes,
   FileText,
   FileType2,
   Image as ImageIcon,
@@ -8,6 +9,12 @@ import {
 export const FOLDER_TEXT = 'text-zinc-400'
 
 export const FILE_VISUALS = {
+  project: {
+    Icon: Boxes,
+    text: 'text-orange-400',
+    hover: 'hover:bg-orange-50/70 dark:hover:bg-orange-950/25',
+    active: 'bg-orange-50 dark:bg-orange-950/30',
+  },
   yaml: {
     Icon: Box,
     text: 'text-rose-300',

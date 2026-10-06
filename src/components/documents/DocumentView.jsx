@@ -3,6 +3,7 @@ import { FileWarning } from 'lucide-react'
 import { useProjectStore } from '@/lib/store/useProjectStore'
 import { classifyFile } from '@/lib/fs/documentType'
 import { DocumentBreadcrumb } from './DocumentBreadcrumb'
+import { ProjectDocumentView } from './ProjectDocumentView'
 import { YamlDocumentView } from './YamlDocumentView'
 import { MarkdownDocumentView } from './MarkdownDocumentView'
 import { PdfDocumentView } from './PdfDocumentView'
@@ -58,6 +59,17 @@ export function DocumentView({ entries = [], selection, onSelect }) {
   if (type === 'yaml') {
     return (
       <YamlWorkspaceView
+        key={key}
+        fileName={activeFile}
+        entries={entries}
+        selection={selection}
+        onSelect={onSelect}
+      />
+    )
+  }
+  if (type === 'project') {
+    return (
+      <ProjectDocumentView
         key={key}
         fileName={activeFile}
         entries={entries}

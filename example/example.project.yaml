@@ -1,0 +1,12 @@
+# Manifeste de projet d'exemple
+title: Projet d'exemple
+description: >
+  Sous-ensemble du notebook : tous les objets de NS1 et l'objet
+  NS2.ObjectDelta, en excluant NS1.ObjectBeta.
+
+include:
+  - NS1.* # tous les objets de NS1 (sous-namespaces inclus)
+  - NS2.ObjectDelta # objet précis
+
+exclude:
+  - NS1.ObjectBeta # exclusion d'un objet

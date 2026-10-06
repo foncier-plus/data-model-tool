@@ -1,4 +1,5 @@
 const YAML_EXTENSIONS = ['.yaml', '.yml']
+const PROJECT_SUFFIXES = ['.project.yaml', '.project.yml']
 const MARKDOWN_EXTENSIONS = ['.md', '.markdown']
 const PDF_EXTENSIONS = ['.pdf']
 const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp', '.avif']
@@ -9,6 +10,8 @@ export function extensionOf(name) {
 }
 
 export function classifyFile(name) {
+  const lower = name.toLowerCase()
+  if (PROJECT_SUFFIXES.some((suffix) => lower.endsWith(suffix))) return 'project'
   const extension = extensionOf(name)
   if (YAML_EXTENSIONS.includes(extension)) return 'yaml'
   if (MARKDOWN_EXTENSIONS.includes(extension)) return 'markdown'

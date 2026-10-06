@@ -14,14 +14,16 @@ import { useTranslation } from '@/lib/i18n'
 import { useProjectStore } from '@/lib/store/useProjectStore'
 
 const KINDS = [
+  { value: 'folder', labelKey: 'new.folder', placeholder: 'sous-dossier' },
+  { value: 'project', labelKey: 'new.project', placeholder: 'mon_projet' },
   { value: 'object', labelKey: 'new.object', placeholder: 'mon_objet' },
   { value: 'markdown', labelKey: 'new.markdown', placeholder: 'guide' },
-  { value: 'folder', labelKey: 'new.folder', placeholder: 'sous-dossier' },
 ]
 
 export function NewEntryDialog({ target, onClose }) {
   const { t } = useTranslation()
   const createObject = useProjectStore((state) => state.createObject)
+  const createProject = useProjectStore((state) => state.createProject)
   const createDocument = useProjectStore((state) => state.createDocument)
   const createFolder = useProjectStore((state) => state.createFolder)
 
@@ -44,6 +46,7 @@ export function NewEntryDialog({ target, onClose }) {
     if (!value) return
     const dir = target?.dirPath ?? ''
     if (kind === 'object') await createObject(dir, value, namespace.trim())
+    else if (kind === 'project') await createProject(dir, value)
     else if (kind === 'markdown') await createDocument(dir, value, 'markdown')
     else await createFolder(dir, value)
     onClose()

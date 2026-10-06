@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   Box,
+  Boxes,
   FileText,
   Folder,
   FolderOpen,
@@ -78,12 +79,13 @@ function creationItems(dirPath, onCreate, t) {
   return [
     { label: t('explorer.folder'), icon: Folder, onSelect: () => onCreate(dirPath, 'folder') },
     { separator: true },
+    { label: t('explorer.project'), icon: Boxes, onSelect: () => onCreate(dirPath, 'project') },
+    { label: t('explorer.object'), icon: Box, onSelect: () => onCreate(dirPath, 'object') },
     {
       label: t('explorer.markdown'),
       icon: FileText,
       onSelect: () => onCreate(dirPath, 'markdown'),
     },
-    { label: t('explorer.yaml'), icon: Box, onSelect: () => onCreate(dirPath, 'object') },
   ]
 }
 

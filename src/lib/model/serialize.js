@@ -25,3 +25,7 @@ export function blankObjectFile(name, namespace = '') {
   lines.push(`name: ${scalar(name)}`, 'description:', 'about:', 'attributes: []', 'groups: []')
   return `${lines.join('\n')}\n`
 }
+
+export function blankProjectFile(title = 'Nouveau projet') {
+  return `# Manifeste de projet (.project.yaml)\ntitle: ${scalar(title)}\ndescription: ""\ninclude: []\nexclude: []\n`
+}

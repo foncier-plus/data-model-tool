@@ -64,7 +64,15 @@ function isHiddenRootFile(fileName) {
   return fileName.slice(0, slash).startsWith('_')
 }
 
-function GraphCanvas({ entries, selection, onSelect, selectedObjects, scope = 'all', fileName = null }) {
+function GraphCanvas({
+  entries,
+  selection,
+  onSelect,
+  selectedObjects,
+  scope = 'all',
+  fileName = null,
+  internalObjectIds = null,
+}) {
   const { fitView } = useReactFlow()
   const updateNodeInternals = useUpdateNodeInternals()
   const linkAttributes = useProjectStore((state) => state.linkAttributes)
@@ -82,11 +90,12 @@ function GraphCanvas({ entries, selection, onSelect, selectedObjects, scope = 'a
   )
 
   const internalIds = useMemo(() => {
+    if (internalObjectIds) return internalObjectIds
     if (scope !== 'file' || !fileName) return null
     return new Set(
       graphEntries.filter((entry) => entry.fileName === fileName).map((entry) => entry.qualifiedName),
     )
-  }, [scope, fileName, graphEntries])
+  }, [scope, fileName, graphEntries, internalObjectIds])
 
   const [collapsed, setCollapsed] = useState(() => new Set())
   const [graphSettings, setGraphSettings] = useLocalStorageState('data-flow.graph-settings', {
@@ -627,7 +636,7 @@ function GraphCanvas({ entries, selection, onSelect, selectedObjects, scope = 'a
               fileName: object.fileName ?? null,
               conflict: object.conflict ?? false,
               files: object.files ?? null,
-              revealOnClick: scope === 'file',
+              revealOnClick: scope === 'file' || scope === 'project',
               index,
               color: colorFor(object.id),
               edgeMode,
@@ -876,7 +885,15 @@ function GraphCanvas({ entries, selection, onSelect, selectedObjects, scope = 'a
   )
 }
 
-export function GraphView({ entries, selection, onSelect, selectedObjects, scope, fileName }) {
+export function GraphView({
+  entries,
+  selection,
+  onSelect,
+  selectedObjects,
+  scope,
+  fileName,
+  internalObjectIds,
+}) {
   return (
     <ReactFlowProvider>
       <GraphCanvas
@@ -886,6 +903,7 @@ export function GraphView({ entries, selection, onSelect, selectedObjects, scope
         selectedObjects={selectedObjects}
         scope={scope}
         fileName={fileName}
+        internalObjectIds={internalObjectIds}
       />
     </ReactFlowProvider>
   )

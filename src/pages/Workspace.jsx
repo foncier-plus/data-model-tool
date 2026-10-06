@@ -142,9 +142,10 @@ export default function Workspace() {
   const index = useMemo(() => buildIndex(entries), [entries])
   const issues = useMemo(() => validateReferences(entries), [entries])
 
-  const activeIsYaml = activeFile ? classifyFile(activeFile) === 'yaml' : false
+  const activeType = activeFile ? classifyFile(activeFile) : null
   const showInspector =
-    activeView === 'data-model' || (activeView === 'documentation' && activeIsYaml)
+    activeView === 'data-model' ||
+    (activeView === 'documentation' && (activeType === 'yaml' || activeType === 'project'))
 
   const handleSelectIssue = (issue) => {
     const element = resolveRef(issue.ref, index)

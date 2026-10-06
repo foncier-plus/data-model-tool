@@ -9,7 +9,7 @@ import {
 import { entryIdentity, normalizeNamespace, parseObjectDocument, parseObjectFile } from '@/lib/model/parse.js'
 import { headingSlugs, resolveWikiPath, slugify } from '@/lib/model/wiki.js'
 import { findEntryByObjectName } from '@/lib/selection.js'
-import { blankObjectFile, serializeObjects } from '@/lib/model/serialize.js'
+import { blankObjectFile, blankProjectFile, serializeObjects } from '@/lib/model/serialize.js'
 import {
   addAttribute,
   addGroup,
@@ -254,7 +254,20 @@ export const useProjectStore = create((set, get) => {
       await loadNotebook(handle())
     },
 
-    select: (selection) => set({ selection }),
+    select: (selection) => {
+      // Selecting an object, a group or an attribute also opens (without
+      // changing the active view) the file that owns the object, so the source
+      // is ready in the editor even when the selection comes from another
+      // document (e.g. the graph of a project).
+      if (selection?.objectName) {
+        const entry = findEntryByObjectName(get().entries, selection.objectName)
+        if (entry?.fileName && entry.fileName !== get().activeFile) {
+          set({ selection, activeFile: entry.fileName })
+          return
+        }
+      }
+      set({ selection })
+    },
     revealSelection: (selection) => {
       set({ selection })
       const entry = findEntryByObjectName(get().entries, selection?.objectName)
@@ -572,7 +585,10 @@ export const useProjectStore = create((set, get) => {
 
     createObject: async (dirPath, name, namespace = '') => {
       const normalized = normalizeNamespace(namespace)
-      const fileName = fs.joinPath(dirPath, `${name}.yaml`)
+      const fileName = fs.joinPath(
+        dirPath,
+        name.endsWith('.object.yaml') ? name : `${name}.object.yaml`,
+      )
       if (await fs.exists(handle(), fileName)) {
         toast.error(`Le fichier ${fileName} existe déjà.`)
         return null
@@ -603,6 +619,21 @@ export const useProjectStore = create((set, get) => {
     createFolder: async (dirPath, name) => {
       await fs.createDirectory(handle(), fs.joinPath(dirPath, name))
       await get().refresh()
+    },
+
+    createProject: async (dirPath, name) => {
+      const fileName = fs.joinPath(
+        dirPath,
+        name.endsWith('.project.yaml') ? name : `${name}.project.yaml`,
+      )
+      if (await fs.exists(handle(), fileName)) {
+        toast.error(`Le fichier ${fileName} existe déjà.`)
+        return null
+      }
+      await fs.writeText(handle(), fileName, blankProjectFile(name))
+      await get().refresh()
+      set({ activeFile: fileName, activeView: 'documentation' })
+      return fileName
     },
 
     renamePath: async (path, newName) => {

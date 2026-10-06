@@ -7,7 +7,8 @@ Ce document décrit le format des objets manipulés par **Data Flow**.
 Un *notebook* est un répertoire (ouvert via File System Access) contenant :
 
 - une **hiérarchie de répertoires** libre ;
-- des fichiers **YAML** (`.yaml`, `.yml`) décrivant un ou plusieurs objets ;
+- des fichiers **objet** (`.object.yaml`, `.object.yml` — l'ancienne extension `.yaml` reste acceptée) décrivant un ou plusieurs objets ;
+- des fichiers **projet** (`.project.yaml`) listant des objets à intégrer au graphe (voir §12) ;
 - des documents **Markdown** (`.md`, `.markdown`) servant de documentation ;
 - des **PDF** et **images** (`.pdf`, `.png`, `.jpg`, …) affichables ;
 - éventuellement un fichier **`markdown.css`** à la racine pour personnaliser le rendu Markdown.
@@ -223,4 +224,43 @@ groups:
         origin:
           from: [NS2.ObjectDelta.delta1]
           formula: "description de la formule"
+```
+
+## 12. Fichier de projet (`.project.yaml`)
+
+Un fichier d'extension **`.project.yaml`** est un manifeste YAML (un seul document) qui déclare **quels objets intégrer au graphe**. Ouvrir un `.project.yaml` affiche, à côté de l'éditeur de code, le graphe des objets qu'il référence (comme pour un fichier objet), et le **panneau latéral droit** permet d'éditer l'objet sélectionné. L'extension composée `.yaml` permet de conserver la coloration syntaxique YAML dans les autres éditeurs.
+
+| Champ | Type | Requis | Défaut | Description |
+| --- | --- | --- | --- | --- |
+| `title` | chaîne | **oui** | — | Titre du projet. |
+| `description` | chaîne | non | `""` | Description lisible. |
+| `include` | liste de motifs | non | `[]` | Objets à intégrer au graphe. |
+| `exclude` | liste de motifs | non | `[]` | Objets à retirer (appliqué après `include`). |
+| *(commentaire)* | commentaire YAML | non | — | Les commentaires `#` sont conservés. |
+
+### Motifs
+
+Un motif s'applique sur l'identifiant qualifié `namespace.name` :
+
+- `NS.Object` → objet **exact** (un namespace seul, ex. `NS1`, n'est **pas** un wildcard) ;
+- `NS.*` → **tous les objets sous `NS`**, de façon **récursive** (sous-namespaces inclus) ;
+- un motif sans correspondance est signalé dans la console de la vue.
+
+### Exemple
+
+Voir [`example.project.yaml`](example.project.yaml) :
+
+```yaml
+# Manifeste de projet d'exemple
+title: Projet d'exemple
+description: >
+  Sous-ensemble du notebook : tous les objets de NS1 et l'objet
+  NS2.ObjectDelta, en excluant NS1.ObjectBeta.
+
+include:
+  - NS1.* # tous les objets de NS1 (sous-namespaces inclus)
+  - NS2.ObjectDelta # objet précis
+
+exclude:
+  - NS1.ObjectBeta # exclusion d'un objet
 ```

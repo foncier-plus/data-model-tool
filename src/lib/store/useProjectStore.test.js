@@ -165,4 +165,20 @@ describe('project store with a notebook', () => {
     expect(entry.namespace).toBeNull()
     expect(useProjectStore.getState().selection.objectName).toBe('client')
   })
+
+  it('opens the owning file when selecting an element from another document', async () => {
+    await useProjectStore.getState().openNotebook(notebook)
+    expect(useProjectStore.getState().activeFile).toBeNull()
+
+    useProjectStore.getState().select({
+      kind: 'attribute',
+      objectName: 'sales.client',
+      groupName: null,
+      attributeName: 'id',
+      ref: 'sales.client.id',
+    })
+
+    expect(useProjectStore.getState().activeFile).toBe('sales/model.yaml')
+    expect(useProjectStore.getState().selection.attributeName).toBe('id')
+  })
 })

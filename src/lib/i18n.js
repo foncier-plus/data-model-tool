@@ -1,3 +1,4 @@
+import { useCallback } from 'react'
 import { useProjectStore } from '@/lib/store/useProjectStore'
 
 const dictionaries = {
@@ -76,8 +77,8 @@ const dictionaries = {
     'namespace.expand': 'Déplier {name}',
     'namespace.collapse': 'Replier {name}',
     'explorer.folder': 'Répertoire',
-    'explorer.markdown': 'Fichier Markdown',
-    'explorer.yaml': 'Fichier YAML',
+    'explorer.markdown': 'Fichier Document (.md)',
+    'explorer.object': 'Fichier Objet (.object.yaml)',
     'explorer.rename': 'Renommer',
     'explorer.delete': 'Supprimer',
     'explorer.deleteConfirm': 'Supprimer « {path} » ?',
@@ -85,12 +86,27 @@ const dictionaries = {
     'explorer.empty': 'Notebook vide. Créez un fichier ou déposez des éléments.',
     'explorer.refresh': 'Rafraîchir',
     'explorer.emptyFolder': 'Vide',
+    'explorer.project': 'Fichier Projet (.project.yaml)',
+    'project.objects.one': '{count} objet',
+    'project.objects.many': '{count} objets',
+    'project.problems.one': '{count} problème',
+    'project.problems.many': '{count} problèmes',
+    'project.empty': 'Aucun objet inclus dans ce projet.',
+    'project.readError': 'Lecture impossible : {file}',
+    'project.error.notObject': 'Le manifeste doit être un document YAML (objet).',
+    'project.error.titleRequired': 'Le champ « title » est requis.',
+    'project.error.includeInvalid': 'Le champ « include » doit être une liste de motifs.',
+    'project.error.excludeInvalid': 'Le champ « exclude » doit être une liste de motifs.',
+    'project.error.includeNoMatch': 'Aucun objet ne correspond au motif « {pattern} ».',
+    'project.error.excludeNoMatch':
+      'Le motif d’exclusion « {pattern} » ne correspond à aucun objet.',
     'new.title': 'Nouveau',
     'new.inDir': 'Dans {path}',
     'new.atRoot': 'À la racine',
     'new.type': 'Type',
-    'new.object': 'Objet YAML',
-    'new.markdown': 'Document Markdown',
+    'new.object': 'Fichier Objet (.object.yaml)',
+    'new.project': 'Fichier Projet (.project.yaml)',
+    'new.markdown': 'Fichier Document (.md)',
     'new.folder': 'Répertoire',
     'new.name': 'Nom',
     'new.namespace': 'Namespace (optionnel)',
@@ -177,8 +193,8 @@ const dictionaries = {
     'namespace.expand': 'Expand {name}',
     'namespace.collapse': 'Collapse {name}',
     'explorer.folder': 'Folder',
-    'explorer.markdown': 'Markdown file',
-    'explorer.yaml': 'YAML file',
+    'explorer.markdown': 'Document file (.md)',
+    'explorer.object': 'Object file (.object.yaml)',
     'explorer.rename': 'Rename',
     'explorer.delete': 'Delete',
     'explorer.deleteConfirm': 'Delete “{path}”?',
@@ -186,12 +202,26 @@ const dictionaries = {
     'explorer.empty': 'Empty notebook. Create a file or drop items.',
     'explorer.refresh': 'Refresh',
     'explorer.emptyFolder': 'Empty',
+    'explorer.project': 'Project file (.project.yaml)',
+    'project.objects.one': '{count} object',
+    'project.objects.many': '{count} objects',
+    'project.problems.one': '{count} problem',
+    'project.problems.many': '{count} problems',
+    'project.empty': 'No object included in this project.',
+    'project.readError': 'Cannot read: {file}',
+    'project.error.notObject': 'The manifest must be a YAML document (object).',
+    'project.error.titleRequired': 'The "title" field is required.',
+    'project.error.includeInvalid': 'The "include" field must be a list of patterns.',
+    'project.error.excludeInvalid': 'The "exclude" field must be a list of patterns.',
+    'project.error.includeNoMatch': 'No object matches the pattern "{pattern}".',
+    'project.error.excludeNoMatch': 'The exclude pattern "{pattern}" matches no object.',
     'new.title': 'New',
     'new.inDir': 'In {path}',
     'new.atRoot': 'At root',
     'new.type': 'Type',
-    'new.object': 'YAML object',
-    'new.markdown': 'Markdown document',
+    'new.object': 'Object file (.object.yaml)',
+    'new.project': 'Project file (.project.yaml)',
+    'new.markdown': 'Document file (.md)',
     'new.folder': 'Folder',
     'new.name': 'Name',
     'new.namespace': 'Namespace (optional)',
@@ -223,8 +253,6 @@ export function pluralKey(language, base, count) {
 
 export function useTranslation() {
   const language = useProjectStore((state) => state.language)
-  return {
-    language,
-    t: (key, vars) => translate(language, key, vars),
-  }
+  const t = useCallback((key, vars) => translate(language, key, vars), [language])
+  return { language, t }
 }
