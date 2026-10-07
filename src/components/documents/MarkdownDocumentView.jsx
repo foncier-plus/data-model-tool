@@ -4,7 +4,6 @@ import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import rehypeRaw from 'rehype-raw'
-import { toast } from 'sonner'
 import { Settings } from 'lucide-react'
 import 'katex/dist/katex.min.css'
 import { CodeEditor } from '@/components/editor/CodeEditor'
@@ -15,7 +14,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { DocumentBreadcrumb } from './DocumentBreadcrumb'
 import { Mermaid } from './Mermaid'
 import { useProjectStore } from '@/lib/store/useProjectStore'
 import { slugify } from '@/lib/model/wiki'
@@ -61,67 +59,55 @@ const COMPONENTS = {
   },
 }
 
-export function MarkdownDocumentView({ fileName }) {
-  const readDocument = useProjectStore((state) => state.readDocument)
-  const saveDocument = useProjectStore((state) => state.saveDocument)
+export function MarkdownEditor({ fileName, text, onChange, onCursor }) {
+  const reveal = useProjectStore((state) => state.reveal)
+  const viewRef = useRef(null)
+  const [ready, setReady] = useState(false)
+
+  const scrollToLine = useCallback((line) => {
+    const view = viewRef.current
+    if (!view || !line) return
+    const clamped = Math.min(Math.max(1, line), view.state.doc.lines)
+    const info = view.state.doc.line(clamped)
+    view.dispatch({ selection: { anchor: info.from }, scrollIntoView: true })
+    view.focus()
+  }, [])
+
+  useEffect(() => {
+    if (!reveal || reveal.fileName !== fileName) return undefined
+    const timer = setTimeout(() => scrollToLine(reveal.line), 0)
+    return () => clearTimeout(timer)
+  }, [reveal, fileName, ready, scrollToLine])
+
+  return (
+    <CodeEditor
+      value={text}
+      onChange={onChange}
+      language="markdown"
+      onCursor={onCursor}
+      onView={(view) => {
+        viewRef.current = view
+        setReady(true)
+      }}
+    />
+  )
+}
+
+export function MarkdownPreview({ fileName, text }) {
   const anchor = useProjectStore((state) => state.anchor)
-  const docRevision = useProjectStore((state) => state.docRevision)
+  const setActiveHeading = useProjectStore((state) => state.setActiveHeading)
   const markdownCss = useProjectStore((state) => state.markdownCss)
   const setMarkdownCss = useProjectStore((state) => state.setMarkdownCss)
   const saveMarkdownCss = useProjectStore((state) => state.saveMarkdownCss)
-  const [text, setText] = useState('')
+  const containerRef = useRef(null)
   const [cssOpen, setCssOpen] = useState(false)
   const [cssDraft, setCssDraft] = useState(markdownCss)
-  const saved = useRef('')
-  const ready = useRef(false)
 
   useEffect(() => {
     if (!cssOpen) return undefined
     const timer = setTimeout(() => saveMarkdownCss(cssDraft), 600)
     return () => clearTimeout(timer)
   }, [cssDraft, cssOpen, saveMarkdownCss])
-
-  useEffect(() => {
-    let active = true
-    readDocument(fileName)
-      .then((content) => {
-        if (!active) return
-        const value = content ?? ''
-        saved.current = value
-        setText(value)
-        ready.current = true
-      })
-      .catch(() => toast.error(`Lecture impossible : ${fileName}`))
-    return () => {
-      active = false
-    }
-  }, [fileName, readDocument, docRevision])
-
-  const save = useCallback(
-    async (value) => {
-      const ok = await saveDocument(fileName, value)
-      if (ok) saved.current = value
-      return ok
-    },
-    [fileName, saveDocument],
-  )
-
-  useEffect(() => {
-    if (!ready.current || text === saved.current) return undefined
-    const timer = setTimeout(() => save(text), 600)
-    return () => clearTimeout(timer)
-  }, [text, save])
-
-  useEffect(() => {
-    const onKeyDown = (event) => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
-        event.preventDefault()
-        save(text)
-      }
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [save, text])
 
   useEffect(() => {
     if (!anchor || anchor.path !== fileName) return undefined
@@ -139,38 +125,45 @@ export function MarkdownDocumentView({ fileName }) {
     }
   }, [anchor, fileName, text])
 
-  return (
-    <div className="flex h-full min-h-0 flex-col">
-      <DocumentBreadcrumb fileName={fileName} />
+  const handleScroll = () => {
+    const container = containerRef.current
+    if (!container) return
+    const headings = container.querySelectorAll('h1[id],h2[id],h3[id],h4[id],h5[id],h6[id]')
+    const top = container.getBoundingClientRect().top + 12
+    let current = null
+    for (const heading of headings) {
+      if (heading.getBoundingClientRect().top <= top) current = heading.id
+      else break
+    }
+    setActiveHeading(current)
+  }
 
-      <div className="flex min-h-0 flex-1">
-        <div className="min-w-0 flex-1 overflow-hidden">
-          <CodeEditor value={text} onChange={setText} language="markdown" />
-        </div>
-        <div role="separator" aria-orientation="vertical" className="w-px shrink-0 bg-border" />
-        <div className="relative min-w-0 flex-1 overflow-hidden bg-background">
-          <button
-            type="button"
-            title="Personnaliser le CSS du rendu Markdown (markdown.css)"
-            aria-label="Personnaliser le CSS du rendu Markdown"
-            onClick={() => {
-              setCssDraft(markdownCss)
-              setCssOpen(true)
-            }}
-            className="absolute top-2 right-3 z-10 flex size-8 items-center justify-center rounded-lg border bg-background/90 text-muted-foreground shadow-sm backdrop-blur hover:bg-accent hover:text-foreground"
-          >
-            <Settings className="size-4" />
-          </button>
-          <div className="markdown-preview h-full overflow-auto p-6">
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm, remarkMath]}
-              rehypePlugins={[rehypeRaw, rehypeKatex]}
-              components={COMPONENTS}
-            >
-              {text}
-            </ReactMarkdown>
-          </div>
-        </div>
+  return (
+    <div className="relative h-full min-h-0">
+      <button
+        type="button"
+        title="Personnaliser le CSS du rendu Markdown (markdown.css)"
+        aria-label="Personnaliser le CSS du rendu Markdown"
+        onClick={() => {
+          setCssDraft(markdownCss)
+          setCssOpen(true)
+        }}
+        className="absolute top-3 right-3 z-20 flex size-8 items-center justify-center rounded-lg border bg-background/95 text-muted-foreground shadow-sm backdrop-blur hover:bg-accent hover:text-foreground"
+      >
+        <Settings className="size-4" />
+      </button>
+      <div
+        ref={containerRef}
+        onScroll={handleScroll}
+        className="markdown-preview h-full overflow-auto bg-background p-6"
+      >
+        <ReactMarkdown
+          remarkPlugins={[remarkGfm, remarkMath]}
+          rehypePlugins={[rehypeRaw, rehypeKatex]}
+          components={COMPONENTS}
+        >
+          {text}
+        </ReactMarkdown>
       </div>
 
       <Dialog open={cssOpen} onOpenChange={setCssOpen}>
@@ -178,8 +171,8 @@ export function MarkdownDocumentView({ fileName }) {
           <DialogHeader>
             <DialogTitle>markdown.css</DialogTitle>
             <DialogDescription>
-              CSS appliqué au rendu Markdown (limité au panneau de rendu). Enregistré à la
-              racine du notebook.
+              CSS appliqué au rendu Markdown (limité au panneau de rendu). Enregistré à la racine
+              du notebook.
             </DialogDescription>
           </DialogHeader>
           <div className="h-[60vh] overflow-hidden rounded-md border">

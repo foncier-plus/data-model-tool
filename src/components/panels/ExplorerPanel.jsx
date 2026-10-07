@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
-  Box,
   Boxes,
-  FileText,
+  FileBox,
+  FilePen,
   Folder,
   FolderOpen,
   Pencil,
@@ -11,20 +11,11 @@ import {
 } from 'lucide-react'
 import { NewEntryDialog } from '@/components/NewEntryDialog'
 import { fileVisual, FOLDER_TEXT } from '@/components/files/visuals'
+import { splitFileName } from '@/lib/fs/documentType'
 import { useTranslation } from '@/lib/i18n'
 import { useProjectStore } from '@/lib/store/useProjectStore'
 import { handlesFromDataTransfer } from '@/lib/fs/picker'
 import { cn } from '@/lib/utils'
-
-function stripExtension(name) {
-  const dot = name.lastIndexOf('.')
-  return dot <= 0 ? name : name.slice(0, dot)
-}
-
-function extensionOf(name) {
-  const base = stripExtension(name)
-  return name.slice(base.length)
-}
 
 let dragSource = null
 
@@ -80,10 +71,10 @@ function creationItems(dirPath, onCreate, t) {
     { label: t('explorer.folder'), icon: Folder, onSelect: () => onCreate(dirPath, 'folder') },
     { separator: true },
     { label: t('explorer.project'), icon: Boxes, onSelect: () => onCreate(dirPath, 'project') },
-    { label: t('explorer.object'), icon: Box, onSelect: () => onCreate(dirPath, 'object') },
+    { label: t('explorer.object'), icon: FileBox, onSelect: () => onCreate(dirPath, 'object') },
     {
       label: t('explorer.markdown'),
-      icon: FileText,
+      icon: FilePen,
       onSelect: () => onCreate(dirPath, 'markdown'),
     },
   ]
@@ -105,8 +96,9 @@ function TreeNode({ node, onCreate, depth = 0 }) {
 
   const isDirectory = node.kind === 'directory'
   const visual = isDirectory ? null : fileVisual(node.type)
-  const baseName = isDirectory ? node.name : stripExtension(node.name)
-  const extension = isDirectory ? '' : extensionOf(node.name)
+  const split = isDirectory ? { base: node.name, extension: '' } : splitFileName(node.name)
+  const baseName = split.base
+  const extension = split.extension
   const active = activeFile === node.path
   const [draft, setDraft] = useState(baseName)
 
@@ -204,10 +196,8 @@ function TreeNode({ node, onCreate, depth = 0 }) {
     return (
       <div
         className={cn(
-          'shrink-0 rounded-lg border transition-colors',
-          over
-            ? 'border-primary bg-primary/10 ring-1 ring-primary/40'
-            : 'border-zinc-200/80 bg-zinc-50/70 dark:border-zinc-700/50 dark:bg-zinc-800/30',
+          'shrink-0 rounded-lg transition-colors',
+          over && 'bg-primary/10 ring-1 ring-primary/40',
         )}
         onDragEnter={(event) => {
           event.preventDefault()
@@ -222,6 +212,7 @@ function TreeNode({ node, onCreate, depth = 0 }) {
         }}
         onDrop={handleDrop}
       >
+        <Menu menu={menu} items={items} onClose={() => setMenu(null)} />
         <div
           role="button"
           tabIndex={0}
@@ -239,7 +230,7 @@ function TreeNode({ node, onCreate, depth = 0 }) {
             if (event.key === 'Enter' && !renaming) setExpanded((value) => !value)
           }}
           className={cn(
-            'flex h-7 cursor-pointer items-center gap-1.5 px-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-200/50 dark:text-zinc-300 dark:hover:bg-zinc-700/40',
+            'peer flex h-7 cursor-pointer items-center gap-1.5 px-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-200/50 dark:text-zinc-300 dark:hover:bg-zinc-700/40',
             expanded ? 'rounded-t-lg' : 'rounded-lg',
           )}
         >
@@ -261,7 +252,7 @@ function TreeNode({ node, onCreate, depth = 0 }) {
           {nameField}
         </div>
         {expanded ? (
-          <div className="flex flex-col gap-0.5 pt-0.5 pb-1 pl-2.5">
+          <div className="flex flex-col gap-0.5 rounded-b-lg pt-0.5 pb-1 pl-2.5 peer-hover:bg-zinc-200/50 dark:peer-hover:bg-zinc-700/40">
             {(node.children ?? []).length > 0 ? (
               (node.children ?? []).map((child) => (
                 <TreeNode key={child.path} node={child} onCreate={onCreate} depth={depth + 1} />
@@ -273,7 +264,6 @@ function TreeNode({ node, onCreate, depth = 0 }) {
             )}
           </div>
         ) : null}
-        <Menu menu={menu} items={items} onClose={() => setMenu(null)} />
       </div>
     )
   }

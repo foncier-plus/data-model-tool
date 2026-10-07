@@ -1,80 +1,25 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTheme } from 'next-themes'
-import {
-  AlertTriangle,
-  BookText,
-  Languages,
-  Moon,
-  PanelRightClose,
-  PanelRightOpen,
-  Sun,
-  Workflow,
-} from 'lucide-react'
-import { Breadcrumb } from '@/components/panels/Breadcrumb'
+import { AlertCircle, Check, Code, Languages, Loader2, Moon, RefreshCw, Sun, Workflow } from 'lucide-react'
 import { ConflictDialog } from '@/components/ConflictDialog'
 import { ExplorerPanel } from '@/components/panels/ExplorerPanel'
-import { GraphView } from '@/components/graph/GraphView'
 import { Inspector } from '@/components/panels/Inspector'
+import { ProjectForm } from '@/components/panels/ProjectForm'
+import { MarkdownOutline } from '@/components/panels/MarkdownOutline'
 import { DocumentView } from '@/components/documents/DocumentView'
-import { Button } from '@/components/ui/button'
+import { TopBreadcrumb } from '@/components/documents/TopBreadcrumb'
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog'
-import { buildIndex, resolveRef, validateReferences } from '@/lib/model/refs'
+  flushDocument,
+  resetDocumentSessions,
+  useActiveDocument,
+} from '@/components/documents/useActiveDocument'
+import { Button } from '@/components/ui/button'
+import { findEntryByObjectName } from '@/lib/selection'
 import { classifyFile } from '@/lib/fs/documentType'
-import { pluralKey, useTranslation } from '@/lib/i18n'
+import { useTranslation } from '@/lib/i18n'
 import { useProjectStore } from '@/lib/store/useProjectStore'
 import { scopeMarkdownCss } from '@/lib/markdownCss'
 import { cn } from '@/lib/utils'
-
-const VIEWS = [
-  { value: 'documentation', labelKey: 'view.documentation', icon: BookText },
-  { value: 'data-model', labelKey: 'view.dataModel', icon: Workflow },
-]
-
-function IssuesDialog({ issues, onSelectIssue, className }) {
-  const { t, language } = useTranslation()
-  const [open, setOpen] = useState(false)
-  const countLabel = t(pluralKey(language, 'issues', issues.length), { count: issues.length })
-
-  return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="outline" size="sm" disabled={issues.length === 0} className={className}>
-          <AlertTriangle />
-          {countLabel}
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>{t('issues.title')}</DialogTitle>
-          <DialogDescription>{t('issues.description')}</DialogDescription>
-        </DialogHeader>
-        <div className="flex max-h-[60vh] flex-col gap-1 overflow-auto">
-          {issues.map((issue, index) => (
-            <button
-              key={`${issue.code}-${issue.ref}-${index}`}
-              type="button"
-              onClick={() => {
-                onSelectIssue(issue)
-                setOpen(false)
-              }}
-              className="flex items-start gap-2 rounded border p-2 text-left text-xs hover:bg-accent"
-            >
-              <code className="shrink-0 rounded bg-muted px-1">{issue.code}</code>
-              <span>{issue.message}</span>
-            </button>
-          ))}
-        </div>
-      </DialogContent>
-    </Dialog>
-  )
-}
 
 function ThemeToggle({ className }) {
   const { resolvedTheme, setTheme } = useTheme()
@@ -109,21 +54,57 @@ function LanguageToggle({ className }) {
   )
 }
 
+function SaveStatus({ className }) {
+  const { t } = useTranslation()
+  const status = useProjectStore((state) => state.status)
+  const message = useProjectStore((state) => state.message)
+  if (status !== 'saving' && status !== 'saved' && status !== 'error') return null
+  const label =
+    status === 'saving'
+      ? t('status.saving')
+      : status === 'error'
+        ? message || t('status.error')
+        : t('status.saved')
+  const Icon = status === 'saving' ? Loader2 : status === 'error' ? AlertCircle : Check
+  return (
+    <span
+      title={label}
+      className={cn(
+        'flex items-center gap-1 text-xs',
+        status === 'error' ? 'text-red-300' : 'text-slate-300',
+        className,
+      )}
+    >
+      <Icon className={cn('size-3.5', status === 'saving' && 'animate-spin')} />
+      <span className="hidden max-w-40 truncate sm:inline">{label}</span>
+    </span>
+  )
+}
+
 export default function Workspace() {
   const { t } = useTranslation()
   const entries = useProjectStore((state) => state.entries)
   const activeFile = useProjectStore((state) => state.activeFile)
-  const activeView = useProjectStore((state) => state.activeView)
-  const setActiveView = useProjectStore((state) => state.setActiveView)
   const selection = useProjectStore((state) => state.selection)
   const select = useProjectStore((state) => state.select)
+  const openFile = useProjectStore((state) => state.openFile)
   const notebookName = useProjectStore((state) => state.notebookName)
   const markdownCss = useProjectStore((state) => state.markdownCss)
+  const refresh = useProjectStore((state) => state.refresh)
   const closeNotebook = useProjectStore((state) => state.closeNotebook)
+  const editorOpen = useProjectStore((state) => state.editorOpen)
+  const toggleEditor = useProjectStore((state) => state.toggleEditor)
+  const docTarget = useProjectStore((state) => state.docTarget)
 
   const [explorerWidth, setExplorerWidth] = useState(280)
   const [panelWidth, setPanelWidth] = useState(380)
-  const [collapsed, setCollapsed] = useState(false)
+  const [explorerCollapsed, setExplorerCollapsed] = useState(false)
+  const [panelCollapsed, setPanelCollapsed] = useState(false)
+
+  // Reset document sessions when the notebook changes.
+  useEffect(() => {
+    resetDocumentSessions()
+  }, [notebookName])
 
   useEffect(() => {
     const onKeyDown = (event) => {
@@ -133,31 +114,47 @@ export default function Workspace() {
         for (const file of state.files) {
           if (file.dirty) state.flush(file.fileName)
         }
+        if (state.activeFile) flushDocument(state.activeFile)
+        if (state.docTarget?.fileName) flushDocument(state.docTarget.fileName)
       }
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [])
 
-  const index = useMemo(() => buildIndex(entries), [entries])
-  const issues = useMemo(() => validateReferences(entries), [entries])
-
   const activeType = activeFile ? classifyFile(activeFile) : null
-  const showInspector =
-    activeView === 'data-model' ||
-    (activeView === 'documentation' && (activeType === 'yaml' || activeType === 'project'))
+  const documentEnabled = activeType === 'project' || activeType === 'markdown'
+  const activeDocument = useActiveDocument(activeFile, documentEnabled)
 
-  const handleSelectIssue = (issue) => {
-    const element = resolveRef(issue.ref, index)
-    if (!element) return
-    select({
-      kind: element.kind,
-      objectName: element.objectName,
-      groupName: element.groupName ?? null,
-      attributeName: element.attributeName ?? null,
-      ref: element.ref,
-    })
+  const selectionEntry = selection ? findEntryByObjectName(entries, selection.objectName) : null
+  const editorFile = docTarget?.fileName ?? selectionEntry?.fileName ?? activeFile
+  const editorType = editorFile ? classifyFile(editorFile) : null
+  const editorDocument = useActiveDocument(
+    editorFile,
+    editorType === 'project' || editorType === 'markdown',
+  )
+
+  const showSidebar =
+    activeType === 'yaml' || activeType === 'project' || activeType === 'markdown'
+
+  const focusFileContext = () => {
+    if (activeType === 'yaml') {
+      const first = entries.find((entry) => entry.fileName === activeFile)
+      if (first) {
+        select({
+          kind: 'object',
+          objectName: first.qualifiedName,
+          groupName: null,
+          attributeName: null,
+          ref: first.qualifiedName,
+        })
+        return
+      }
+    }
+    select(null)
   }
+
+  const handleGraphSelect = (next) => (next ? select(next) : focusFileContext())
 
   const startResize = (event, { width, setWidth, min, max, invert }) => {
     event.preventDefault()
@@ -174,101 +171,131 @@ export default function Workspace() {
     window.addEventListener('mouseup', onUp)
   }
 
+  const renderSidebar = () => {
+    if (docTarget) {
+      return <MarkdownOutline fileName={docTarget.fileName} text={editorDocument.text} />
+    }
+    if (activeType === 'markdown') {
+      return <MarkdownOutline fileName={activeFile} text={activeDocument.text} />
+    }
+    if (activeType === 'project' && !selection) {
+      return (
+        <ProjectForm
+          fileName={activeFile}
+          text={activeDocument.text}
+          onChange={activeDocument.onChange}
+        />
+      )
+    }
+    return <Inspector entries={entries} selection={selection} />
+  }
+
   return (
     <div className="flex h-svh flex-col bg-background">
       {markdownCss ? <style>{scopeMarkdownCss(markdownCss)}</style> : null}
-      <header className="relative z-20 flex h-14 shrink-0 items-center gap-4 border-b border-slate-800 bg-slate-900 px-4 text-slate-100">
-        <button
-          type="button"
-          title={t('app.changeNotebook')}
-          onClick={closeNotebook}
-          className="flex min-w-0 items-center gap-2.5 rounded-lg px-1.5 py-1 text-left hover:bg-white/10"
-        >
-          <span className="flex size-9 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
-            <Workflow className="size-4" />
-          </span>
-          <div className="min-w-0 leading-tight">
-            <div className="truncate text-sm font-semibold">Data Flow</div>
-            <div className="truncate text-xs text-slate-400">{notebookName ?? t('app.notebook')}</div>
-          </div>
-        </button>
+      <header className="relative z-20 flex h-14 shrink-0 items-center gap-3 border-b border-slate-800 bg-slate-900 px-4 text-slate-100">
+        <div className="flex min-w-0 shrink-0 items-center gap-3">
+          <button
+            type="button"
+            title={t('app.changeNotebook')}
+            onClick={closeNotebook}
+            className="flex min-w-0 items-center gap-2.5 rounded-lg px-1.5 py-1 text-left hover:bg-white/10"
+          >
+            <span className="flex size-9 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
+              <Workflow className="size-4" />
+            </span>
+            <span className="truncate text-sm font-semibold">Data Flow</span>
+          </button>
 
-        <div className="pointer-events-none absolute inset-x-0 flex justify-center">
-          <div className="pointer-events-auto inline-flex rounded-full bg-white p-1 shadow-sm">
-            {VIEWS.map((view) => {
-              const Icon = view.icon
-              const isActive = activeView === view.value
-              return (
-                <button
-                  key={view.value}
-                  type="button"
-                  onClick={() => setActiveView(view.value)}
-                  className={cn(
-                    'flex items-center gap-2 rounded-full px-4 py-1.5 text-sm font-medium transition-colors',
-                    isActive
-                      ? 'bg-primary text-primary-foreground shadow'
-                      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
-                  )}
-                >
-                  <Icon className="size-4" />
-                  {t(view.labelKey)}
-                </button>
-              )
-            })}
+          <div className="flex min-w-0 max-w-40 items-center gap-1 border-l border-white/15 pl-3">
+            <span className="truncate text-sm font-medium text-slate-300">
+              {notebookName ?? t('app.notebook')}
+            </span>
+            <button
+              type="button"
+              title={t('app.refresh')}
+              aria-label={t('app.refresh')}
+              onClick={refresh}
+              className="flex size-6 shrink-0 items-center justify-center rounded text-slate-300 hover:bg-white/10 hover:text-white"
+            >
+              <RefreshCw className="size-3.5" />
+            </button>
           </div>
         </div>
 
-        <div className="ml-auto flex items-center gap-1">
-          <IssuesDialog
-            issues={issues}
-            onSelectIssue={handleSelectIssue}
-            className="border-white/20 bg-white/5 text-slate-100 hover:bg-white/10 hover:text-white"
-          />
-          <ThemeToggle className="text-slate-200 hover:bg-white/10 hover:text-white" />
-          <LanguageToggle className="text-slate-200 hover:bg-white/10 hover:text-white" />
-          {showInspector ? (
+        <div className="flex min-w-0 flex-1 items-center justify-center gap-2 overflow-hidden px-4">
+          {activeFile ? (
+            <TopBreadcrumb
+              fileName={activeFile}
+              selection={selection}
+              docTarget={docTarget}
+              onSelectFile={focusFileContext}
+            />
+          ) : null}
+        </div>
+
+        <div className="flex shrink-0 items-center gap-2">
+          <SaveStatus />
+          {editorFile && activeType !== 'pdf' && activeType !== 'image' ? (
             <Button
               variant="ghost"
               size="icon"
-              className="text-slate-200 hover:bg-white/10 hover:text-white"
-              title={t(collapsed ? 'panel.show' : 'panel.hide')}
-              onClick={() => setCollapsed((value) => !value)}
+              className={cn(
+                'text-slate-200 hover:bg-white/10 hover:text-white',
+                editorOpen && 'bg-white/20 text-white',
+              )}
+              title={t(editorOpen ? 'view.hideEditor' : 'view.showEditor')}
+              aria-pressed={editorOpen}
+              onClick={toggleEditor}
             >
-              {collapsed ? <PanelRightOpen /> : <PanelRightClose />}
+              <Code />
             </Button>
           ) : null}
+          <ThemeToggle className="text-slate-200 hover:bg-white/10 hover:text-white" />
+          <LanguageToggle className="text-slate-200 hover:bg-white/10 hover:text-white" />
         </div>
       </header>
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
-        <ExplorerPanel width={explorerWidth} />
-        <div
-          role="separator"
-          aria-orientation="vertical"
-          onMouseDown={(event) =>
-            startResize(event, {
-              width: explorerWidth,
-              setWidth: setExplorerWidth,
-              min: 200,
-              max: 520,
-              invert: false,
-            })
-          }
-          className="group flex w-1.5 shrink-0 cursor-col-resize items-center justify-center"
-        >
-          <span className="h-full w-px bg-border transition-all group-hover:w-0.5 group-hover:bg-primary" />
-        </div>
+        {!explorerCollapsed ? <ExplorerPanel width={explorerWidth} /> : null}
+        {!explorerCollapsed ? (
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            onMouseDown={(event) =>
+              startResize(event, {
+                width: explorerWidth,
+                setWidth: setExplorerWidth,
+                min: 200,
+                max: 520,
+                invert: false,
+              })
+            }
+            className="group flex w-1.5 shrink-0 cursor-col-resize items-center justify-center"
+          >
+            <span className="h-full w-px bg-border transition-all group-hover:w-0.5 group-hover:bg-primary" />
+          </div>
+        ) : null}
 
         <main className="h-full min-h-0 flex-1 overflow-hidden">
-          {activeView === 'documentation' ? (
-            <DocumentView entries={entries} selection={selection} onSelect={select} />
-          ) : null}
-          {activeView === 'data-model' ? (
-            <GraphView entries={entries} selection={selection} onSelect={select} selectedObjects={null} />
-          ) : null}
+          <DocumentView
+            entries={entries}
+            selection={selection}
+            onSelect={handleGraphSelect}
+            onOpenFile={openFile}
+            document={activeDocument}
+            editorDocument={editorDocument}
+            editorFile={editorFile}
+            editorOpen={editorOpen}
+            docTarget={docTarget}
+            explorerCollapsed={explorerCollapsed}
+            onToggleExplorer={() => setExplorerCollapsed((value) => !value)}
+            panelCollapsed={panelCollapsed}
+            onTogglePanel={showSidebar ? () => setPanelCollapsed((value) => !value) : null}
+          />
         </main>
 
-        {showInspector && !collapsed ? (
+        {showSidebar && !panelCollapsed ? (
           <>
             <div
               role="separator"
@@ -277,7 +304,7 @@ export default function Workspace() {
                 startResize(event, {
                   width: panelWidth,
                   setWidth: setPanelWidth,
-                  min: 260,
+                  min: 240,
                   max: 760,
                   invert: true,
                 })
@@ -291,10 +318,7 @@ export default function Workspace() {
               style={{ width: panelWidth }}
               className="sidebar-panel flex h-full min-h-0 shrink-0 flex-col overflow-hidden border-l bg-sidebar"
             >
-              <Breadcrumb selection={selection} />
-              <div className="min-h-0 flex-1">
-                <Inspector entries={entries} selection={selection} />
-              </div>
+              <div className="min-h-0 flex-1 overflow-hidden">{renderSidebar()}</div>
             </aside>
           </>
         ) : null}

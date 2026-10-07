@@ -1,89 +1,212 @@
-import { GraphView } from '@/components/graph/GraphView'
-import { FileWarning } from 'lucide-react'
+import { useMemo } from 'react'
+import { FolderOpen, PanelLeft, PanelRight } from 'lucide-react'
 import { useProjectStore } from '@/lib/store/useProjectStore'
 import { classifyFile } from '@/lib/fs/documentType'
+import { useTranslation } from '@/lib/i18n'
+import { cn } from '@/lib/utils'
+import { GraphView } from '@/components/graph/GraphView'
 import { DocumentBreadcrumb } from './DocumentBreadcrumb'
-import { ProjectDocumentView } from './ProjectDocumentView'
 import { YamlDocumentView } from './YamlDocumentView'
-import { MarkdownDocumentView } from './MarkdownDocumentView'
+import { ProjectEditor } from './ProjectEditor'
+import { MarkdownEditor, MarkdownPreview } from './MarkdownDocumentView'
 import { PdfDocumentView } from './PdfDocumentView'
 import { ImageDocumentView } from './ImageDocumentView'
+import { parseProjectManifest, resolveProjectPatterns } from '@/lib/model/projectManifest'
+import { headingPathAtLine } from '@/lib/model/wiki'
 
-function EmptyState() {
+function SideToggle({ side, collapsed, onToggle }) {
+  const { t } = useTranslation()
+  if (!onToggle) return null
+  const isLeft = side === 'left'
+  const Icon = isLeft ? PanelLeft : PanelRight
+  const label = isLeft
+    ? t(collapsed ? 'view.showExplorer' : 'view.hideExplorer')
+    : t(collapsed ? 'panel.show' : 'panel.hide')
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center text-sm text-muted-foreground">
-      <FileWarning className="size-5" />
-      <p>Ouvrez un fichier dans l'explorateur pour l'afficher ici.</p>
-    </div>
+    <button
+      type="button"
+      title={label}
+      aria-label={label}
+      aria-pressed={!collapsed}
+      onClick={onToggle}
+      className={cn(
+        'absolute top-1/2 z-20 flex h-12 w-5 -translate-y-1/2 items-center justify-center bg-sidebar text-muted-foreground transition-colors hover:bg-primary hover:text-primary-foreground',
+        isLeft ? 'left-0 rounded-r-lg' : 'right-0 rounded-l-lg',
+      )}
+    >
+      <Icon className="size-3.5" />
+    </button>
   )
 }
 
-function YamlWorkspaceView({ fileName, entries, selection, onSelect }) {
-  const hasEntries = entries.some((entry) => entry.fileName === fileName)
+function collectProjects(node, out = []) {
+  for (const child of node?.children ?? []) {
+    if (child.kind === 'directory') collectProjects(child, out)
+    else if (child.type === 'project') out.push(child.path)
+  }
+  return out
+}
+
+function EmptyState({ explorerCollapsed, onToggleExplorer }) {
+  const { t } = useTranslation()
+  const tree = useProjectStore((state) => state.tree)
+  const openFile = useProjectStore((state) => state.openFile)
+  const projects = useMemo(() => collectProjects(tree), [tree])
+
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <DocumentBreadcrumb fileName={fileName} />
-      <div className="flex min-h-0 flex-1">
-        <div className="flex min-w-0 flex-1 flex-col overflow-hidden border-r">
-          <YamlDocumentView fileName={fileName} />
+    <div className="relative flex h-full min-h-0 flex-col">
+      <SideToggle side="left" collapsed={explorerCollapsed} onToggle={onToggleExplorer} />
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 p-6 text-center">
+        <div className="flex flex-col items-center gap-2 text-sm text-muted-foreground">
+          <FolderOpen className="size-5" />
+          <p>{t('launcher.title')}</p>
         </div>
-        <div className="hidden min-w-0 flex-1 overflow-hidden lg:block">
-          {hasEntries ? (
-            <GraphView
-              entries={entries}
-              selection={selection}
-              onSelect={onSelect}
-              selectedObjects={null}
-              scope="file"
-              fileName={fileName}
-            />
-          ) : (
-            <div className="flex h-full items-center justify-center p-6 text-center text-sm text-muted-foreground">
-              Aucun objet à afficher dans ce fichier.
-            </div>
-          )}
-        </div>
+        {projects.length > 0 ? (
+          <div className="flex max-h-[60%] w-full max-w-md flex-col gap-1 overflow-auto">
+            {projects.map((path) => (
+              <button
+                key={path}
+                type="button"
+                onClick={() => openFile(path)}
+                className="truncate rounded-md border bg-card px-3 py-2 text-left font-mono text-xs hover:bg-accent"
+              >
+                {path}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground">{t('document.open')}</p>
+        )}
       </div>
     </div>
   )
 }
 
-export function DocumentView({ entries = [], selection, onSelect }) {
+export function DocumentView({
+  entries = [],
+  selection,
+  onSelect,
+  onOpenFile,
+  document,
+  editorDocument,
+  editorFile,
+  editorOpen,
+  docTarget,
+  explorerCollapsed,
+  onToggleExplorer,
+  panelCollapsed,
+  onTogglePanel,
+}) {
+  const { t } = useTranslation()
   const activeFile = useProjectStore((state) => state.activeFile)
+  const setDocTargetHeadings = useProjectStore((state) => state.setDocTargetHeadings)
 
-  if (!activeFile) return <EmptyState />
+  const type = activeFile ? classifyFile(activeFile) : null
+  const documentText = document?.text ?? ''
+  const manifest = useMemo(
+    () => (type === 'project' ? parseProjectManifest(activeFile, documentText) : null),
+    [type, activeFile, documentText],
+  )
+  const resolved = useMemo(
+    () => (manifest ? resolveProjectPatterns(entries, manifest.include, manifest.exclude) : null),
+    [manifest, entries],
+  )
 
-  const type = classifyFile(activeFile)
-  const key = activeFile
+  if (!activeFile) {
+    return <EmptyState explorerCollapsed={explorerCollapsed} onToggleExplorer={onToggleExplorer} />
+  }
 
-  if (type === 'yaml') {
+  if (type === 'pdf' || type === 'image') {
     return (
-      <YamlWorkspaceView
-        key={key}
-        fileName={activeFile}
+      <div className="relative h-full min-h-0">
+        <SideToggle side="left" collapsed={explorerCollapsed} onToggle={onToggleExplorer} />
+        <SideToggle side="right" collapsed={panelCollapsed} onToggle={onTogglePanel} />
+        {type === 'pdf' ? (
+          <PdfDocumentView fileName={activeFile} />
+        ) : (
+          <ImageDocumentView fileName={activeFile} />
+        )}
+      </div>
+    )
+  }
+
+  // The editor targets the documentation/selection file, else the main file.
+  const editorType = classifyFile(editorFile ?? activeFile)
+  const editorText = editorDocument?.text ?? ''
+  let editor = null
+  if (editorType === 'yaml') {
+    editor = <YamlDocumentView fileName={editorFile ?? activeFile} />
+  } else if (editorType === 'project') {
+    editor = (
+      <ProjectEditor
+        fileName={editorFile}
+        text={editorText}
+        onChange={editorDocument?.onChange}
         entries={entries}
-        selection={selection}
-        onSelect={onSelect}
+      />
+    )
+  } else if (editorType === 'markdown') {
+    editor = (
+      <MarkdownEditor
+        fileName={editorFile ?? activeFile}
+        text={editorText}
+        onChange={editorDocument?.onChange}
+        onCursor={
+          docTarget
+            ? (line) => setDocTargetHeadings(headingPathAtLine(editorText, line))
+            : null
+        }
       />
     )
   }
-  if (type === 'project') {
-    return (
-      <ProjectDocumentView
-        key={key}
-        fileName={activeFile}
+
+  // The central view follows the documentation target when there is one.
+  let view = null
+  if (docTarget) {
+    view = <MarkdownPreview fileName={docTarget.fileName} text={editorText} />
+  } else if (type === 'yaml') {
+    view = (
+      <GraphView
         entries={entries}
         selection={selection}
         onSelect={onSelect}
+        scope="file"
+        fileName={activeFile}
       />
     )
+  } else if (type === 'project') {
+    view =
+      resolved && resolved.ids.size > 0 ? (
+        <GraphView
+          entries={entries}
+          selection={selection}
+          onSelect={onSelect}
+          scope="project"
+          internalObjectIds={resolved.ids}
+        />
+      ) : (
+        <div className="flex h-full items-center justify-center p-6 text-center text-sm text-muted-foreground">
+          {t('project.empty')}
+        </div>
+      )
+  } else if (type === 'markdown') {
+    view = <MarkdownPreview fileName={activeFile} text={documentText} />
   }
-  if (type === 'markdown') return <MarkdownDocumentView key={key} fileName={activeFile} />
-  if (type === 'pdf') return <PdfDocumentView key={key} fileName={activeFile} />
-  if (type === 'image') return <ImageDocumentView key={key} fileName={activeFile} />
+
   return (
-    <div className="flex h-full items-center justify-center p-6 text-sm text-muted-foreground">
-      Format non pris en charge : {activeFile}
+    <div className="relative flex h-full min-h-0">
+      {editorOpen && editor ? (
+        <div className="flex min-w-0 flex-1 flex-col border-r">
+          <DocumentBreadcrumb
+            fileName={editorFile ?? activeFile}
+            onSelect={() => onOpenFile?.(editorFile ?? activeFile)}
+          />
+          <div className="min-h-0 flex-1">{editor}</div>
+        </div>
+      ) : null}
+      <div className="min-w-0 flex-1 overflow-hidden">{view}</div>
+      <SideToggle side="left" collapsed={explorerCollapsed} onToggle={onToggleExplorer} />
+      <SideToggle side="right" collapsed={panelCollapsed} onToggle={onTogglePanel} />
     </div>
   )
 }

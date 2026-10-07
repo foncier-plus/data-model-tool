@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Wand2 } from 'lucide-react'
-import { CodeEditor } from '@/components/editor/CodeEditor'
-import { ErrorConsole } from '@/components/editor/ErrorConsole'
+import { YamlEditor } from '@/components/editor/YamlEditor'
 import { useProjectStore } from '@/lib/store/useProjectStore'
 import { parseObjectFile } from '@/lib/model/parse'
 import { prettifyFile } from '@/lib/model/prettify'
@@ -114,8 +112,6 @@ export function YamlDocumentView({ fileName }) {
     return () => clearTimeout(timer)
   }, [reveal, fileName, viewReady, scrollToLine])
 
-  const jumpTo = (item) => scrollToLine(item.line)
-
   const prettify = () => {
     const next = prettifyFile(text)
     setText(next)
@@ -123,28 +119,15 @@ export function YamlDocumentView({ fileName }) {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="relative min-h-0 flex-1 overflow-hidden">
-        <button
-          type="button"
-          onClick={prettify}
-          title="Reformater le YAML (prettify)"
-          aria-label="Reformater le YAML"
-          className="absolute top-2 right-12 z-10 flex size-8 items-center justify-center rounded-lg border bg-background/90 text-muted-foreground shadow-sm backdrop-blur hover:bg-accent hover:text-foreground"
-        >
-          <Wand2 className="size-4" />
-        </button>
-        <CodeEditor
-          value={text}
-          onChange={setText}
-          language="yaml"
-          onView={(view) => {
-            viewRef.current = view
-            setViewReady(true)
-          }}
-        />
-      </div>
-      <ErrorConsole diagnostics={diagnostics} onSelectLine={jumpTo} />
-    </div>
+    <YamlEditor
+      value={text}
+      onChange={setText}
+      diagnostics={diagnostics}
+      onPrettify={prettify}
+      onView={(view) => {
+        viewRef.current = view
+        setViewReady(true)
+      }}
+    />
   )
 }

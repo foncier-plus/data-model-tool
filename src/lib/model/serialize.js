@@ -27,5 +27,5 @@ export function blankObjectFile(name, namespace = '') {
 }
 
 export function blankProjectFile(title = 'Nouveau projet') {
-  return `# Manifeste de projet (.project.yaml)\ntitle: ${scalar(title)}\ndescription: ""\ninclude: []\nexclude: []\n`
+  return `# Manifeste de projet\ntitle: ${scalar(title)}\ndescription: ""\ninclude: []\nexclude: []\n`
 }

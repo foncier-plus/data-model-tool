@@ -67,19 +67,20 @@ Autres scripts :
    - clic sur l'icône dossier pour déplier/replier ;
    - **clic droit** pour créer (Répertoire / Fichier Projet / Fichier Objet / Fichier Document), renommer ou supprimer ;
    - **double-clic** sur un nom pour le renommer ;
-   - glisser-déposer pour réorganiser, ou importer des fichiers externes.
-3. **Travailler dans les onglets centraux** :
-   - **Documentation** : édite le fichier ouvert. Pour un **objet** (`.object.yaml`, ou `.yaml`), l'éditeur de code est affiché à côté de son graphe ; pour un **projet** (`.project.yaml`), l'éditeur est affiché à côté du graphe des objets qu'il référence, et le panneau latéral droit permet d'éditer l'objet sélectionné comme pour un objet ; pour un Markdown, un éditeur scindé avec rendu temps réel ; PDF et images s'affichent directement.
-   - **Data model** : graphe global de tous les objets, regroupés par namespace, avec le panneau d'édition à droite.
-4. **Éditer un objet** via le panneau de droite : namespace, nom, description, documentation (`about`), groupes, attributs (type, présence, exemple, origine/formule).
-5. **Prettifier** un YAML avec le bouton en haut à droite de l'éditeur (ordonnancement et séparation des attributs/groupes).
+   - glisser-déposer pour importer des fichiers externes.
+3. **Travailler sur le fichier ouvert** : la **topbar** affiche le nom du notebook (+ rafraîchir) puis, séparé d'un trait vertical, le **breadcrumb du fichier principal**. La **zone centrale** montre le contenu : graphe pour un **objet** (`.object.yaml`, ou `.yaml`) et un **projet** (`.project.yaml`), rendu temps réel pour un Markdown, visionneuse pour PDF/images.
+   - L'**espace d'édition du code source** (colonne gauche, replié par défaut) s'affiche via le bouton dédié sur la zone principale ; son **breadcrumb de fichier** est en bas.
+   - La **sidebar d'édition** (droite) s'adapte : formulaires objet/groupe/attribut, édition simple d'un **projet** (titre, description, `include`/`exclude`), ou **sommaire des titres** pour un Markdown.
+   - Les boutons sur la zone principale replient l'**éditeur de code** et l'**explorateur**.
+4. **Éditer un objet** via la sidebar de droite : namespace, nom, description, documentation (`about`), groupes, attributs (type, présence, exemple, origine/formule).
+5. **Prettifier** un YAML avec le bouton de l'éditeur de code (ordonnancement et séparation des attributs/groupes).
 6. **Documenter** un objet/attribut : renseignez `about: "[[documentation.md#section]]"`, puis cliquez sur l'icône ⓘ — le fichier ou la section est créé si nécessaire, et le titre est surligné.
 
 ## Fonctionnalités
 
 - **File System Access** : lecture / écriture directe sur disque, sans serveur ; notebook mémorisé ; drag & drop et import de fichiers/répertoires.
 - **YAML multi-documents** : un fichier = plusieurs objets, séparés par `---` ; `namespace` optionnel (racine par défaut).
-- **Projet (`.project.yaml`)** : manifeste listant les objets à intégrer au graphe (`include` / `exclude`, wildcard `NS.*` récursif, `title` requis, commentaires conservés) ; ouvert avec le graphe de son périmètre à côté de l'éditeur, et le panneau d'édition à droite.
+- **Projet (`.project.yaml`)** : manifeste listant les objets à intégrer au graphe (`include` / `exclude`, wildcard `NS.*` récursif, `title` requis, commentaires conservés) ; graphe de son périmètre au centre, édition simple (titre/description/`include`/`exclude`) dans la sidebar.
 - **Édition complète** : formulaires objet / groupe / attribut, édition du code source, création / renommage / suppression, sauvegarde automatique (`Ctrl/Cmd+S`).
 - **Graphe par namespace** : regroupement à chaque niveau, repli/dépli, dépendances affichées, liens attributs↔attributs, détection des **conflits** (objet déclaré dans plusieurs fichiers, signalé en rouge avec liens vers les fichiers).
 - **Éditeur de code CodeMirror** : coloration YAML / Markdown / CSS (thèmes Tomorrow clair / Yesterday sombre), numéros de ligne, repli, retour à la ligne, diagnostics inline et **console de traitement**.

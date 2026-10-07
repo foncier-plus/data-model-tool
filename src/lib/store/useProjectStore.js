@@ -7,7 +7,7 @@ import {
   resolveRef,
 } from '@/lib/model/refs.js'
 import { entryIdentity, normalizeNamespace, parseObjectDocument, parseObjectFile } from '@/lib/model/parse.js'
-import { headingSlugs, resolveWikiPath, slugify } from '@/lib/model/wiki.js'
+import { headingPath, headingSlugs, resolveWikiPath, slugify } from '@/lib/model/wiki.js'
 import { findEntryByObjectName } from '@/lib/selection.js'
 import { blankObjectFile, blankProjectFile, serializeObjects } from '@/lib/model/serialize.js'
 import {
@@ -23,6 +23,7 @@ import {
   setObjectField,
 } from '@/lib/model/mutations.js'
 import * as fs from '@/lib/fs/notebook.js'
+import { documentSessionBridge } from '@/lib/documentSessionBridge.js'
 import { hashText } from '@/lib/fs/hash.js'
 import { ensurePermission } from '@/lib/fs/picker.js'
 import { clearHandle, loadHandle, saveHandle } from '@/lib/fs/handleStore.js'
@@ -189,11 +190,13 @@ export const useProjectStore = create((set, get) => {
     entries: [],
     markdownCss: '',
     activeFile: null,
-    activeView: 'data-model',
     anchor: null,
     reveal: null,
     docRevision: 0,
     selection: null,
+    activeHeading: null,
+    docTarget: null,
+    editorOpen: false,
     panelTab: 'edit',
     language: loadLanguage(),
     status: 'idle',
@@ -206,7 +209,6 @@ export const useProjectStore = create((set, get) => {
       if (await ensurePermission(stored, 'readwrite', { request: false })) {
         set({ handle: stored })
         const ok = await loadNotebook(stored)
-        if (ok) set({ activeView: 'data-model' })
         return ok
       }
       set({ pendingHandle: stored })
@@ -223,7 +225,7 @@ export const useProjectStore = create((set, get) => {
       const ok = await loadNotebook(directoryHandle)
       if (ok) {
         await saveHandle(directoryHandle)
-        set({ activeView: 'data-model', activeFile: null, selection: null })
+        set({ activeFile: null, selection: null })
       }
       return ok
     },
@@ -241,7 +243,6 @@ export const useProjectStore = create((set, get) => {
         entries: [],
         markdownCss: '',
         activeFile: null,
-        activeView: 'data-model',
         selection: null,
         status: 'idle',
         message: null,
@@ -255,33 +256,40 @@ export const useProjectStore = create((set, get) => {
     },
 
     select: (selection) => {
-      // Selecting an object, a group or an attribute also opens (without
-      // changing the active view) the file that owns the object, so the source
-      // is ready in the editor even when the selection comes from another
-      // document (e.g. the graph of a project).
-      if (selection?.objectName) {
-        const entry = findEntryByObjectName(get().entries, selection.objectName)
-        if (entry?.fileName && entry.fileName !== get().activeFile) {
-          set({ selection, activeFile: entry.fileName })
-          return
-        }
+      // Selecting an element opens the editor on its owning file and reveals
+      // the element; the main opened file must not change.
+      if (!selection) {
+        set({ selection: null, docTarget: null })
+        return
       }
-      set({ selection })
-    },
-    revealSelection: (selection) => {
-      set({ selection })
-      const entry = findEntryByObjectName(get().entries, selection?.objectName)
+      set({ selection, docTarget: null })
+      const entry = findEntryByObjectName(get().entries, selection.objectName)
       if (!entry) return
       const line = lineForSelection(entry, selection)
       revealNonce += 1
       set({
-        activeFile: entry.fileName,
-        activeView: 'documentation',
         anchor: null,
         reveal: { fileName: entry.fileName, line: line ?? null, token: revealNonce },
       })
     },
+    revealSelection: (selection) => get().select(selection),
     clearSelection: () => set({ selection: null }),
+    setActiveHeading: (activeHeading) => set({ activeHeading }),
+    setDocTargetHeadings: (headings) => {
+      const target = get().docTarget
+      if (!target) return
+      set({ docTarget: { ...target, headings } })
+    },
+    scrollToHeading: (path, id, line = null) => {
+      revealNonce += 1
+      set({
+        anchor: { path, id },
+        activeHeading: id,
+        reveal: { fileName: path, line, token: revealNonce },
+      })
+    },
+    setEditorOpen: (editorOpen) => set({ editorOpen }),
+    toggleEditor: () => set((state) => ({ editorOpen: !state.editorOpen })),
     setPanelTab: (panelTab) => set({ panelTab }),
     setLanguage: (language) => {
       const next = language === 'en' ? 'en' : 'fr'
@@ -292,15 +300,15 @@ export const useProjectStore = create((set, get) => {
       }
       set({ language: next })
     },
-    setActiveView: (activeView) => set({ activeView }),
     openFile: (activeFile) => {
       const first = get().entries.find((entry) => entry.fileName === activeFile)
       set({
         activeFile,
-        activeView: 'documentation',
         anchor: null,
         reveal: null,
-        ...(first ? { selection: toSelection('object', first.qualifiedName) } : {}),
+        activeHeading: null,
+        docTarget: null,
+        selection: first ? toSelection('object', first.qualifiedName) : null,
       })
     },
     openWikiLink: async (yamlFileName, path, section = '') => {
@@ -309,19 +317,21 @@ export const useProjectStore = create((set, get) => {
 
       const initialRevision = get().docRevision
       let revision = initialRevision
+      let content = ''
       try {
         const exists = await fs.exists(get().handle, resolved)
         if (!exists) {
           const title = section || fs.baseName(resolved).replace(/\.[^.]+$/, '')
-          const content = section ? `## ${section}\n` : `# ${title}\n`
+          content = section ? `## ${section}\n` : `# ${title}\n`
           await fs.writeText(get().handle, resolved, content)
           revision += 1
-        } else if (section) {
-          const content = await fs.readText(get().handle, resolved)
-          if (!headingSlugs(content).has(slugify(section))) {
+        } else {
+          content = await fs.readText(get().handle, resolved)
+          if (section && !headingSlugs(content).has(slugify(section))) {
             const trimmed = content.replace(/\s*$/, '')
             const prefix = trimmed ? `${trimmed}\n\n` : ''
-            await fs.writeText(get().handle, resolved, `${prefix}## ${section}\n`)
+            content = `${prefix}## ${section}\n`
+            await fs.writeText(get().handle, resolved, content)
             revision += 1
           }
         }
@@ -329,11 +339,21 @@ export const useProjectStore = create((set, get) => {
         toast.error(error.message)
       }
 
+      // Opening documentation must not move the main document: the markdown is
+      // shown as a secondary target (breadcrumb + editor).
+      const targetPath = section ? headingPath(content, slugify(section)) : []
+      const line = targetPath.length ? targetPath[targetPath.length - 1].line : 1
+      revealNonce += 1
       set({
-        activeFile: resolved,
-        activeView: 'documentation',
+        docTarget: {
+          fileName: resolved,
+          label: fs.baseName(resolved),
+          headings: targetPath,
+        },
+        reveal: { fileName: resolved, line, token: revealNonce },
         anchor: section ? { path: resolved, id: slugify(section) } : null,
-        reveal: null,
+        selection: null,
+        editorOpen: true,
         docRevision: revision,
       })
 
@@ -393,8 +413,23 @@ export const useProjectStore = create((set, get) => {
     readDocument: (path) => fs.readText(handle(), path),
     readBlob: (path) => fs.readBlob(handle(), path),
 
-    saveDocument: async (path, content) => {
+    saveDocument: async (path, content, expected) => {
       try {
+        if (expected !== undefined) {
+          const disk = await fs.readText(handle(), path).catch(() => null)
+          if (disk !== null && disk !== expected) {
+            set({
+              status: 'error',
+              conflict: {
+                fileName: path,
+                currentContent: disk,
+                currentHash: hashText(disk),
+                content,
+              },
+            })
+            return false
+          }
+        }
         await fs.writeText(handle(), path, content)
         set({ status: 'saved' })
         return true
@@ -597,7 +632,6 @@ export const useProjectStore = create((set, get) => {
       await get().refresh()
       set({
         activeFile: fileName,
-        activeView: 'documentation',
         selection: toSelection('object', entryIdentity(normalized, name)),
       })
       return fileName
@@ -612,7 +646,7 @@ export const useProjectStore = create((set, get) => {
       }
       await fs.writeText(handle(), fileName, `# ${name}\n`)
       await get().refresh()
-      set({ activeFile: fileName, activeView: 'documentation' })
+      set({ activeFile: fileName })
       return fileName
     },
 
@@ -632,7 +666,7 @@ export const useProjectStore = create((set, get) => {
       }
       await fs.writeText(handle(), fileName, blankProjectFile(name))
       await get().refresh()
-      set({ activeFile: fileName, activeView: 'documentation' })
+      set({ activeFile: fileName })
       return fileName
     },
 
@@ -686,6 +720,12 @@ export const useProjectStore = create((set, get) => {
     resolveConflictReload: async () => {
       const conflict = get().conflict
       if (!conflict) return
+      const isObjectFile = get().files.some((item) => item.fileName === conflict.fileName)
+      if (!isObjectFile) {
+        documentSessionBridge.reload?.(conflict.fileName, conflict.currentContent)
+        set({ conflict: null, status: 'saved' })
+        return
+      }
       const file = toFileRecord(conflict.fileName, conflict.currentContent)
       set((state) => {
         const files = state.files.map((item) =>
@@ -705,6 +745,7 @@ export const useProjectStore = create((set, get) => {
       if (!conflict) return
       set({ conflict: null, status: 'saving' })
       await fs.writeText(get().handle, conflict.fileName, conflict.content)
+      documentSessionBridge.reload?.(conflict.fileName, conflict.content)
       await get().refresh()
       set({ status: 'saved' })
     },

@@ -40,20 +40,6 @@ export function PanelSwitch({ value, onChange, options }) {
   )
 }
 
-export function TextField({ label, value, onChange, placeholder, disabled }) {
-  return (
-    <div className="flex flex-col gap-1.5">
-      {label ? <Label className="text-xs text-muted-foreground">{label}</Label> : null}
-      <Input
-        value={value ?? ''}
-        placeholder={placeholder}
-        disabled={disabled}
-        onChange={(event) => onChange(event.target.value)}
-      />
-    </div>
-  )
-}
-
 export function MarkdownField({ label, value, onChange, placeholder, rows = 4 }) {
   const { t } = useTranslation()
   const [editing, setEditing] = useState(false)
@@ -97,20 +83,6 @@ export function MarkdownField({ label, value, onChange, placeholder, rows = 4 })
         )}
         <Pencil className="absolute top-2 right-2 size-3 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
       </button>
-    </div>
-  )
-}
-
-export function TextAreaField({ label, value, onChange, placeholder, rows = 3 }) {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <Label className="text-xs text-muted-foreground">{label}</Label>
-      <Textarea
-        value={value ?? ''}
-        placeholder={placeholder}
-        rows={rows}
-        onChange={(event) => onChange(event.target.value)}
-      />
     </div>
   )
 }

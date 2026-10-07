@@ -1,7 +1,7 @@
 import {
-  Box,
   Boxes,
-  FileText,
+  FileBox,
+  FilePen,
   FileType2,
   Image as ImageIcon,
 } from 'lucide-react'
@@ -16,13 +16,13 @@ export const FILE_VISUALS = {
     active: 'bg-orange-50 dark:bg-orange-950/30',
   },
   yaml: {
-    Icon: Box,
+    Icon: FileBox,
     text: 'text-rose-300',
     hover: 'hover:bg-rose-50/70 dark:hover:bg-rose-950/25',
     active: 'bg-rose-50 dark:bg-rose-950/30',
   },
   markdown: {
-    Icon: FileText,
+    Icon: FilePen,
     text: 'text-sky-300',
     hover: 'hover:bg-sky-50/70 dark:hover:bg-sky-950/25',
     active: 'bg-sky-50 dark:bg-sky-950/30',

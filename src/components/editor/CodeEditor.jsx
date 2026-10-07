@@ -1,6 +1,7 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import CodeMirror from '@uiw/react-codemirror'
 import { EditorView } from '@codemirror/view'
+import { StateEffect } from '@codemirror/state'
 import { yaml as yamlLanguage } from '@codemirror/lang-yaml'
 import { markdown as markdownLanguage } from '@codemirror/lang-markdown'
 import { css as cssLanguage } from '@codemirror/lang-css'
@@ -48,10 +49,14 @@ function yamlLintExtension() {
   })
 }
 
-export function CodeEditor({ value, onChange, language = 'yaml', readOnly = false, onView }) {
+export function CodeEditor({ value, onChange, language = 'yaml', readOnly = false, onView, onCursor }) {
   const { resolvedTheme } = useTheme()
   const theme = resolvedTheme === 'dark' ? yesterdayTheme : tomorrowTheme
   const [wrap, setWrap] = useLocalStorageState('data-flow.editor.wordwrap', true)
+  const cursorRef = useRef(onCursor)
+  useEffect(() => {
+    cursorRef.current = onCursor
+  }, [onCursor])
 
   const extensions = useMemo(() => {
     const languages = { markdown: markdownLanguage, css: cssLanguage, yaml: yamlLanguage }
@@ -84,7 +89,17 @@ export function CodeEditor({ value, onChange, language = 'yaml', readOnly = fals
         extensions={extensions}
         editable={!readOnly}
         onChange={onChange}
-        onCreateEditor={(view) => onView?.(view)}
+        onCreateEditor={(view) => {
+          onView?.(view)
+          const listener = EditorView.updateListener.of((update) => {
+            if (update.selectionSet || update.docChanged) {
+              const line = update.state.doc.lineAt(update.state.selection.main.head).number
+              cursorRef.current?.(line)
+            }
+          })
+          view.dispatch({ effects: StateEffect.appendConfig.of(listener) })
+          cursorRef.current?.(view.state.doc.lineAt(view.state.selection.main.head).number)
+        }}
         basicSetup={{
           lineNumbers: true,
           foldGutter: false,

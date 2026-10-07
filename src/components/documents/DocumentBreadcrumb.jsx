@@ -1,28 +1,17 @@
 import { Fragment, useState } from 'react'
 import { ChevronRight, Folder } from 'lucide-react'
-import { classifyFile } from '@/lib/fs/documentType'
-import { fileVisual, FOLDER_TEXT } from '@/components/files/visuals'
+import { classifyFile, splitFileName } from '@/lib/fs/documentType'
+import { fileVisual } from '@/components/files/visuals'
 import { useProjectStore } from '@/lib/store/useProjectStore'
 import { cn } from '@/lib/utils'
 
-function stripExtension(name) {
-  const dot = name.lastIndexOf('.')
-  return dot <= 0 ? name : name.slice(0, dot)
-}
-
-function extensionOf(name) {
-  const base = stripExtension(name)
-  return name.slice(base.length)
-}
-
-export function DocumentBreadcrumb({ fileName, children }) {
+export function DocumentBreadcrumb({ fileName, onSelect }) {
   const renamePath = useProjectStore((state) => state.renamePath)
   const segments = fileName.split('/')
   const folders = segments.slice(0, -1)
   const file = segments.at(-1)
   const { Icon, text } = fileVisual(classifyFile(file))
-  const base = stripExtension(file)
-  const extension = extensionOf(file)
+  const { base, extension } = splitFileName(file)
   const [renaming, setRenaming] = useState(false)
   const [draft, setDraft] = useState(base)
 
@@ -39,7 +28,7 @@ export function DocumentBreadcrumb({ fileName, children }) {
       {folders.map((folder, index) => (
         <Fragment key={`${folder}-${index}`}>
           <span className="flex items-center gap-1 text-muted-foreground">
-            <Folder className={cn('size-3.5 shrink-0', FOLDER_TEXT)} />
+            <Folder className="size-3.5 shrink-0" />
             <span className="max-w-40 truncate">{folder}</span>
           </span>
           <ChevronRight className="size-3 shrink-0 text-muted-foreground/50" />
@@ -64,7 +53,9 @@ export function DocumentBreadcrumb({ fileName, children }) {
           <button
             type="button"
             title="Double-cliquez pour renommer"
-            onDoubleClick={() => {
+            onClick={() => onSelect?.(fileName)}
+            onDoubleClick={(event) => {
+              event.stopPropagation()
               setDraft(base)
               setRenaming(true)
             }}
@@ -74,9 +65,6 @@ export function DocumentBreadcrumb({ fileName, children }) {
           </button>
         )}
       </span>
-
-      <div className="flex-1" />
-      {children ? <div className="flex shrink-0 items-center gap-1">{children}</div> : null}
     </div>
   )
 }

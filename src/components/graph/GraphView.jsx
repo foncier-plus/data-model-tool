@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Background,
   Controls,
-  MarkerType,
   ReactFlow,
   ReactFlowProvider,
   useEdgesState,
@@ -18,76 +17,51 @@ import {
   graphNeighbors,
   selectionObjectId,
 } from '@/lib/model/graph'
-import {
-  buildVisibleGraph,
-  filterObjectIds,
-  namespaceLabel,
-  namespacePrefixes,
-} from '@/lib/model/hierarchy'
-import { colorFor } from '@/lib/colors'
+import { buildVisibleGraph, filterObjectIds, namespacePrefixes } from '@/lib/model/hierarchy'
 import { useLocalStorageState } from '@/lib/useLocalStorageState'
 import { useProjectStore } from '@/lib/store/useProjectStore'
-import { DependencyNode } from './DependencyNode'
-import { EntityNode } from './EntityNode'
-import { FlatEdge } from './FlatEdge'
 import { GraphSettings } from './GraphSettings'
-import { NamespaceNode } from './NamespaceNode'
 import {
   COLLAPSED_GROUP_HEIGHT,
   COLLAPSED_GROUP_WIDTH,
   COLUMN_GAP,
   NAMESPACE_PADDING,
   NS_HEADER_HEIGHT,
-  NODE_WIDTH,
-  isUnderNamespace,
   layoutGraph,
   objectSize,
 } from '@/lib/layout'
-
-const nodeTypes = { entity: EntityNode, namespace: NamespaceNode, dependency: DependencyNode }
-const edgeTypes = { flat: FlatEdge }
-
-const DEPENDENCY_WIDTH = 180
-const DEPENDENCY_HEIGHT = 36
-
-const GRAPH_BACKGROUND = {
-  gap: 10,
-  color: 'var(--graph-dot)',
-  bgColor: 'var(--graph-background)',
-}
-
-// Files living in a root-level directory whose name starts with "_" are
-// hidden from the data model (e.g. "_draft", "_archive").
-function isHiddenRootFile(fileName) {
-  const slash = fileName.indexOf('/')
-  if (slash === -1) return false
-  return fileName.slice(0, slash).startsWith('_')
-}
+import {
+  DEPENDENCY_HEIGHT,
+  DEPENDENCY_WIDTH,
+  GRAPH_BACKGROUND,
+  edgeTypes,
+  isHiddenRootFile,
+  nodeTypes,
+} from './graphConstants'
+import { buildNodeSpecs } from './buildNodeSpecs'
+import { useGraphInteractions } from './useGraphInteractions'
+import { useGraphEdgeSync } from './useGraphEdgeSync'
 
 function GraphCanvas({
   entries,
   selection,
   onSelect,
-  selectedObjects,
-  scope = 'all',
+  scope = 'file',
   fileName = null,
   internalObjectIds = null,
 }) {
   const { fitView } = useReactFlow()
   const updateNodeInternals = useUpdateNodeInternals()
   const linkAttributes = useProjectStore((state) => state.linkAttributes)
+  const revealSelection = useProjectStore((state) => state.revealSelection)
 
   const graphEntries = useMemo(
-    () =>
-      scope === 'file' ? entries : entries.filter((entry) => !isHiddenRootFile(entry.fileName)),
+    () => (scope === 'file' ? entries : entries.filter((entry) => !isHiddenRootFile(entry.fileName))),
     [entries, scope],
   )
   const index = useMemo(() => buildIndex(graphEntries), [graphEntries])
   const fullObjectGraph = useMemo(() => buildObjectGraph(graphEntries, index), [graphEntries, index])
-  const attributeGraph = useMemo(
-    () => buildAttributeEdges(graphEntries, index),
-    [graphEntries, index],
-  )
+  const attributeGraph = useMemo(() => buildAttributeEdges(graphEntries, index), [graphEntries, index])
 
   const internalIds = useMemo(() => {
     if (internalObjectIds) return internalObjectIds
@@ -115,11 +89,8 @@ function GraphCanvas({
   const updateSettings = (patch) => setGraphSettings((previous) => ({ ...previous, ...patch }))
 
   const objectIds = useMemo(
-    () =>
-      filterObjectIds(fullObjectGraph, internalIds ?? selectedObjects, {
-        children: showChildObjects,
-      }),
-    [fullObjectGraph, selectedObjects, internalIds, showChildObjects],
+    () => filterObjectIds(fullObjectGraph, internalIds, { children: showChildObjects }),
+    [fullObjectGraph, internalIds, showChildObjects],
   )
 
   const visible = useMemo(
@@ -132,8 +103,7 @@ function GraphCanvas({
     [visible],
   )
 
-  const edgeMode =
-    attributeRelations || selection?.kind === 'attribute' ? 'attribute' : 'aggregated'
+  const edgeMode = attributeRelations || selection?.kind === 'attribute' ? 'attribute' : 'aggregated'
 
   const activeEdges = useMemo(() => {
     if (edgeMode === 'attribute') {
@@ -189,8 +159,8 @@ function GraphCanvas({
     return set
   }, [selection, attributeGraph])
 
-  // When attribute relations are shown, every attribute involved in a link
-  // is revealed so the containing groups expand automatically.
+  // When attribute relations are shown, every attribute involved in a link is
+  // revealed so the containing groups expand automatically.
   const linkedRefs = useMemo(() => {
     const set = new Set()
     if (!attributeRelations) return set
@@ -204,16 +174,14 @@ function GraphCanvas({
     return set
   }, [attributeRelations, attributeGraph, visible])
 
-  // File scope: only issues of the edited YAML file. Data model: every issue.
-  // Grouped by owning object.
+  // Only report issues of the objects actually shown in the current graph.
   const issueGroups = useMemo(() => {
     const all = validateReferences(graphEntries)
-    const filtered =
-      scope === 'file' && fileName ? all.filter((issue) => issue.file === fileName) : all
     const groups = new Map()
-    for (const issue of filtered) {
+    for (const issue of all) {
       const element = resolveRef(issue.ref, index)
       const objectName = element?.objectName ?? issue.ref
+      if (objectIds && !objectIds.has(objectName)) continue
       if (!groups.has(objectName)) {
         groups.set(objectName, {
           objectName,
@@ -224,8 +192,8 @@ function GraphCanvas({
       groups.get(objectName).issues.push(issue)
     }
     return [...groups.values()]
-  }, [graphEntries, scope, fileName, index])
-  const revealSelection = useProjectStore((state) => state.revealSelection)
+  }, [graphEntries, index, objectIds])
+
   const handleSelectIssue = (issue) => {
     const element = resolveRef(issue.ref, index)
     if (!element) return
@@ -270,8 +238,6 @@ function GraphCanvas({
 
   const nodesRef = useRef([])
   const namespaceOfRef = useRef(namespaceOf)
-  const positionsRef = useRef(new Map())
-  const dragStartRef = useRef(null)
   const appliedRef = useRef({ signature: null })
   const appliedLayoutRef = useRef(null)
   const handlesRef = useRef(null)
@@ -286,6 +252,36 @@ function GraphCanvas({
   useEffect(() => {
     namespaceOfRef.current = namespaceOf
   }, [namespaceOf])
+
+  const { positionsRef, handleNodesChange, handleNodeDragStart, handleNodeDrag, toggleGroup } =
+    useGraphInteractions({
+      onNodesChange,
+      setNodes,
+      setCollapsed,
+      namespaceOfRef,
+    })
+
+  useGraphEdgeSync({
+    activeEdges,
+    edgeMode,
+    setEdges,
+    selectionKey: [
+      edgeMode,
+      selectedId ?? '',
+      selection?.ref ?? '',
+      [...upstream].sort().join(','),
+      [...downstream].sort().join(','),
+      [...refNeighbors.up].sort().join(','),
+      [...refNeighbors.down].sort().join(','),
+    ].join('|'),
+    selectedId,
+    selection,
+    selectedGroupRefs,
+    relatedObjects,
+    refNeighbors,
+    revealRefs,
+    setNodes,
+  })
 
   const measureKey = nodes
     .filter((node) => node.type === 'entity')
@@ -409,71 +405,6 @@ function GraphCanvas({
     return result
   }, [nodes, layoutGroups, layoutPositions])
 
-  const toggleGroup = useCallback((namespace) => {
-    setCollapsed((previous) => {
-      const next = new Set(previous)
-      if (next.has(namespace)) next.delete(namespace)
-      else next.add(namespace)
-      return next
-    })
-  }, [])
-
-  const handleNodesChange = useCallback(
-    (changes) => {
-      onNodesChange(changes)
-      for (const change of changes) {
-        if (change.type === 'position' && change.position) {
-          positionsRef.current.set(change.id, { x: change.position.x, y: change.position.y })
-        }
-      }
-    },
-    [onNodesChange],
-  )
-
-  const handleNodeDragStart = useCallback((_, node) => {
-    dragStartRef.current = {
-      id: node.id,
-      position: { x: node.position.x, y: node.position.y },
-      namespace: node.type === 'namespace' ? node.id.slice(3) : null,
-    }
-  }, [])
-
-  const handleNodeDrag = useCallback(
-    (_, node) => {
-      const start = dragStartRef.current
-      if (!start || start.id !== node.id) return
-      if (node.type !== 'namespace' || !start.namespace) return
-      const delta = {
-        x: node.position.x - start.position.x,
-        y: node.position.y - start.position.y,
-      }
-      dragStartRef.current = { ...start, position: { x: node.position.x, y: node.position.y } }
-      if (delta.x === 0 && delta.y === 0) return
-
-      const namespace = start.namespace
-      for (const [id, position] of [...positionsRef.current]) {
-        if (id === node.id) continue
-        const unitNamespace = id.startsWith('ns:')
-          ? id.slice(3)
-          : namespaceOfRef.current.get(id)
-        if (unitNamespace && isUnderNamespace(unitNamespace, namespace)) {
-          positionsRef.current.set(id, { x: position.x + delta.x, y: position.y + delta.y })
-        }
-      }
-
-      setNodes((previous) =>
-        previous.map((item) => {
-          if (item.id === node.id) return item
-          const position = positionsRef.current.get(item.id)
-          if (!position) return item
-          if (item.position.x === position.x && item.position.y === position.y) return item
-          return { ...item, position }
-        }),
-      )
-    },
-    [setNodes],
-  )
-
   useEffect(() => {
     const layoutKey = [
       units.map((unit) => unit.id).sort().join(','),
@@ -536,122 +467,27 @@ function GraphCanvas({
 
     if (appliedRef.current.signature !== signature) {
       appliedRef.current.signature = signature
-      setNodes((previous) => {
-        const byId = new Map(previous.map((node) => [node.id, node]))
-        const specs = []
-
-        for (const [fullName, rect] of groupRects) {
-          if (visible.collapsedGroupIds.has(fullName)) continue
-          const id = `ns:${fullName}`
-          const existing = byId.get(id)
-          specs.push({
-            ...existing,
-            id,
-            type: 'namespace',
-            selectable: false,
-            position: { x: rect.x, y: rect.y },
-            style: { width: rect.width, height: rect.height, pointerEvents: 'none' },
-            zIndex: 0,
-            data: {
-              ...existing?.data,
-              label: namespaceLabel(fullName),
-              namespace: fullName,
-              collapsed: false,
-              count: namespaceCounts.get(fullName) ?? 0,
-              edgeMode,
-              onToggle: toggleGroup,
-            },
-          })
-        }
-
-        for (const namespace of visible.collapsedGroupIds) {
-          const id = `ns:${namespace}`
-          const existing = byId.get(id)
-          specs.push({
-            ...existing,
-            id,
-            type: 'namespace',
-            selectable: false,
-            position: positionsRef.current.get(id),
-            style: {
-              width: COLLAPSED_GROUP_WIDTH,
-              height: COLLAPSED_GROUP_HEIGHT,
-              pointerEvents: 'none',
-            },
-            zIndex: 0,
-            data: {
-              ...existing?.data,
-              label: namespaceLabel(namespace),
-              namespace,
-              collapsed: true,
-              count: namespaceCounts.get(namespace) ?? 0,
-              edgeMode,
-              onToggle: toggleGroup,
-            },
-          })
-        }
-
-        for (const object of visible.objectNodes) {
-          const existing = byId.get(object.id)
-          const external = Boolean(internalIds && !internalIds.has(object.id))
-          const condensed = external && !showParentObjects
-
-          if (condensed) {
-            specs.push({
-              ...existing,
-              id: object.id,
-              type: 'dependency',
-              selectable: true,
-              position: positionsRef.current.get(object.id),
-              style: { width: DEPENDENCY_WIDTH },
-              zIndex: 1,
-              measured: existing?.measured,
-              data: {
-                ...existing?.data,
-                label: object.model?.name ?? object.id,
-                qualifiedName: object.id,
-                namespace: object.namespace ?? null,
-                color: colorFor(object.id),
-                highlighted: object.id === selectedId,
-                dimmed: Boolean(selectedId) && !relatedObjects.has(object.id),
-                external,
-              },
-            })
-            continue
-          }
-
-          specs.push({
-            ...existing,
-            id: object.id,
-            type: 'entity',
-            position: positionsRef.current.get(object.id),
-            style: { width: NODE_WIDTH },
-            zIndex: 1,
-            measured: existing?.measured,
-            data: {
-              ...existing?.data,
-              model: object.model,
-              qualifiedName: object.id,
-              namespace: object.namespace ?? null,
-              fileName: object.fileName ?? null,
-              conflict: object.conflict ?? false,
-              files: object.files ?? null,
-              revealOnClick: scope === 'file' || scope === 'project',
-              index,
-              color: colorFor(object.id),
-              edgeMode,
-              revealRefs,
-              linkedRefs,
-              autoCollapse,
-              attributeRelations,
-              rootGroup,
-              external,
-            },
-          })
-        }
-
-        return specs
-      })
+      setNodes((previous) =>
+        buildNodeSpecs({
+          previous,
+          visible,
+          groupRects,
+          namespaceCounts,
+          positions: positionsRef.current,
+          internalIds,
+          showParentObjects,
+          selectedId,
+          relatedObjects,
+          edgeMode,
+          revealRefs,
+          linkedRefs,
+          autoCollapse,
+          attributeRelations,
+          rootGroup,
+          index,
+          toggleGroup,
+        }),
+      )
     }
 
     const topology = [
@@ -717,123 +553,7 @@ function GraphCanvas({
     setNodes,
     fitView,
     updateNodeInternals,
-  ])
-
-  useEffect(() => {
-    setEdges((previous) => {
-      const byId = new Map(previous.map((edge) => [edge.id, edge]))
-      return activeEdges.map((edge) => {
-        const color = colorFor(edge.source)
-        const existing = byId.get(edge.id)
-        return {
-          ...existing,
-          id: edge.id,
-          type: 'flat',
-          source: edge.source,
-          target: edge.target,
-          sourceHandle: edge.sourceHandle,
-          targetHandle: edge.targetHandle,
-          sourceRef: edge.sourceRef,
-          targetRef: edge.targetRef,
-          zIndex: edgeMode === 'attribute' ? 2 : 0,
-          markerEnd: {
-            type: MarkerType.ArrowClosed,
-            color,
-            markerUnits: 'userSpaceOnUse',
-            width: 25,
-            height: 25,
-          },
-          style: { stroke: color, strokeWidth: 1.5, cursor: 'pointer' },
-        }
-      })
-    })
-  }, [activeEdges, edgeMode, setEdges])
-
-  const selectionKey = useMemo(
-    () =>
-      [
-        edgeMode,
-        selectedId ?? '',
-        selection?.ref ?? '',
-        [...upstream].sort().join(','),
-        [...downstream].sort().join(','),
-        [...refNeighbors.up].sort().join(','),
-        [...refNeighbors.down].sort().join(','),
-      ].join('|'),
-    [edgeMode, selectedId, selection, upstream, downstream, refNeighbors],
-  )
-
-  useEffect(() => {
-    // Only a focused attribute (or group) dims the other attributes and
-    // highlights its connections. Selecting an object must not gray out rows.
-    const hasHighlight =
-      edgeMode === 'attribute' && Boolean(selection) && selection.kind !== 'object'
-
-    setNodes((previous) =>
-      previous.map((node) => ({
-        ...node,
-        data: {
-          ...node.data,
-          edgeMode,
-          revealRefs,
-          highlighted: node.id === selectedId,
-          dimmed: Boolean(selectedId) && !relatedObjects.has(node.id),
-          selectedRef: selection?.ref ?? null,
-          hasHighlight,
-          upstreamRefs: refNeighbors.up,
-          downstreamRefs: refNeighbors.down,
-        },
-      })),
-    )
-
-    setEdges((previous) =>
-      previous.map((edge) => {
-        const hasSelection = edgeMode === 'aggregated' ? Boolean(selectedId) : Boolean(selection)
-        const isRelated = (() => {
-          if (edgeMode === 'aggregated') {
-            return !selectedId || edge.source === selectedId || edge.target === selectedId
-          }
-          if (!selection) return true
-          if (selection.kind === 'attribute') {
-            return edge.sourceRef === selection.ref || edge.targetRef === selection.ref
-          }
-          if (selection.kind === 'group') {
-            return (
-              selectedGroupRefs?.has(edge.sourceRef) === true ||
-              selectedGroupRefs?.has(edge.targetRef) === true
-            )
-          }
-          return edge.source === selectedId || edge.target === selectedId
-        })()
-        const isUpstream =
-          edgeMode === 'aggregated'
-            ? edge.target === selectedId
-            : edge.targetRef === selection?.ref
-        const emphasized = hasSelection && isRelated
-        const hidden = hasSelection && !isRelated
-        return {
-          ...edge,
-          animated: isUpstream,
-          markerEnd: edge.markerEnd,
-          style: {
-            ...edge.style,
-            opacity: hidden ? 0 : 1,
-            strokeWidth: emphasized ? 3 : 1.5,
-          },
-        }
-      }),
-    )
-  }, [
-    selectionKey,
-    edgeMode,
-    selectedId,
-    selection,
-    selectedGroupRefs,
-    relatedObjects,
-    refNeighbors,
-    revealRefs,
-    setNodes,
-    setEdges,
+    positionsRef,
   ])
 
   const handleConnect = useCallback(
@@ -885,22 +605,13 @@ function GraphCanvas({
   )
 }
 
-export function GraphView({
-  entries,
-  selection,
-  onSelect,
-  selectedObjects,
-  scope,
-  fileName,
-  internalObjectIds,
-}) {
+export function GraphView({ entries, selection, onSelect, scope, fileName, internalObjectIds }) {
   return (
     <ReactFlowProvider>
       <GraphCanvas
         entries={entries}
         selection={selection}
         onSelect={onSelect}
-        selectedObjects={selectedObjects}
         scope={scope}
         fileName={fileName}
         internalObjectIds={internalObjectIds}

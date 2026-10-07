@@ -1,5 +1,33 @@
 import { describe, expect, it } from 'vitest'
-import { classifyFile, extensionOf, isSupportedFile } from '@/lib/fs/documentType'
+import {
+  classifyFile,
+  extensionOf,
+  isSupportedFile,
+  splitFileName,
+} from '@/lib/fs/documentType'
+
+describe('splitFileName', () => {
+  it('hides the object/project type extension from the base', () => {
+    expect(splitFileName('foo.object.yaml')).toEqual({
+      base: 'foo',
+      extension: '.object.yaml',
+    })
+    expect(splitFileName('foo.project.yaml')).toEqual({
+      base: 'foo',
+      extension: '.project.yaml',
+    })
+    expect(splitFileName('bar.project.yml')).toEqual({
+      base: 'bar',
+      extension: '.project.yml',
+    })
+  })
+
+  it('keeps the simple extension for other files', () => {
+    expect(splitFileName('foo.yaml')).toEqual({ base: 'foo', extension: '.yaml' })
+    expect(splitFileName('guide.md')).toEqual({ base: 'guide', extension: '.md' })
+    expect(splitFileName('noext')).toEqual({ base: 'noext', extension: '' })
+  })
+})
 
 describe('classifyFile', () => {
   it('classifies project files', () => {

@@ -32,7 +32,6 @@ function reset() {
     files: [],
     entries: [],
     activeFile: null,
-    activeView: 'data-model',
     anchor: null,
     selection: null,
     status: 'idle',
@@ -112,9 +111,11 @@ describe('project store with a notebook', () => {
 
     await useProjectStore.getState().openWikiLink('model.yaml', 'docs/guide.md', 'Identité')
     let state = useProjectStore.getState()
-    expect(state.activeFile).toBe('docs/guide.md')
-    expect(state.activeView).toBe('documentation')
-    expect(state.anchor).toEqual({ path: 'docs/guide.md', id: 'identite' })
+    expect(state.activeFile).toBeNull()
+    expect(state.docTarget.fileName).toBe('docs/guide.md')
+    expect(state.docTarget.headings).toEqual([
+      { level: 2, label: 'Identité', id: 'identite', line: 1 },
+    ])
     expect(await readText(wiki, 'docs/guide.md')).toBe('## Identité\n')
 
     await useProjectStore.getState().openWikiLink('model.yaml', 'docs/guide.md', 'Identité')
@@ -166,7 +167,7 @@ describe('project store with a notebook', () => {
     expect(useProjectStore.getState().selection.objectName).toBe('client')
   })
 
-  it('opens the owning file when selecting an element from another document', async () => {
+  it('does not change the opened file when selecting an element', async () => {
     await useProjectStore.getState().openNotebook(notebook)
     expect(useProjectStore.getState().activeFile).toBeNull()
 
@@ -178,7 +179,7 @@ describe('project store with a notebook', () => {
       ref: 'sales.client.id',
     })
 
-    expect(useProjectStore.getState().activeFile).toBe('sales/model.yaml')
+    expect(useProjectStore.getState().activeFile).toBeNull()
     expect(useProjectStore.getState().selection.attributeName).toBe('id')
   })
 })

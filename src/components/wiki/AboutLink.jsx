@@ -1,4 +1,4 @@
-import { Info, Paperclip } from 'lucide-react'
+import { Info } from 'lucide-react'
 import { parseWikiLink } from '@/lib/model/wiki'
 import { useProjectStore } from '@/lib/store/useProjectStore'
 import { cn } from '@/lib/utils'
@@ -26,30 +26,6 @@ export function AboutLink({ about, yamlFileName, className }) {
       )}
     >
       <Info className="size-3" />
-    </button>
-  )
-}
-
-export function RichText({ value, yamlFileName, className }) {
-  const openWikiLink = useProjectStore((state) => state.openWikiLink)
-  const link = parseWikiLink(value)
-
-  if (!link) {
-    if (!value) return null
-    return <p className={cn('text-xs text-muted-foreground', className)}>{value}</p>
-  }
-
-  return (
-    <button
-      type="button"
-      onClick={() => openWikiLink(yamlFileName, link.path, link.section)}
-      className={cn(
-        'inline-flex items-center gap-1 text-xs text-primary underline underline-offset-2 hover:text-primary/80',
-        className,
-      )}
-    >
-      <Paperclip className="size-3" />
-      {labelOf(link)}
     </button>
   )
 }
