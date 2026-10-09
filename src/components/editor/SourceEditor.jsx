@@ -1,12 +1,24 @@
-import { useCallback, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Wand2 } from 'lucide-react'
 import { CodeEditor } from '@/components/editor/CodeEditor'
 import { ErrorConsole } from '@/components/editor/ErrorConsole'
+import { useProjectStore } from '@/lib/store/useProjectStore'
 
-// Shared YAML code editor (objects and projects): CodeMirror + optional
-// prettify + error console, with click-to-line support.
-export function YamlEditor({ value, onChange, diagnostics = [], onPrettify = null, onView = null }) {
+// Unified source editor (YAML objects, projects and Markdown): CodeMirror +
+// optional prettify + error console, with reveal (scroll to a line) and cursor
+// reporting.
+export function SourceEditor({
+  language = 'yaml',
+  fileName = null,
+  value,
+  onChange,
+  diagnostics = null,
+  onPrettify = null,
+  onCursor = null,
+}) {
+  const reveal = useProjectStore((state) => state.reveal)
   const viewRef = useRef(null)
+  const [ready, setReady] = useState(false)
 
   const scrollToLine = useCallback((line) => {
     const view = viewRef.current
@@ -16,6 +28,12 @@ export function YamlEditor({ value, onChange, diagnostics = [], onPrettify = nul
     view.dispatch({ selection: { anchor: info.from }, scrollIntoView: true })
     view.focus()
   }, [])
+
+  useEffect(() => {
+    if (!reveal || !fileName || reveal.fileName !== fileName) return undefined
+    const timer = setTimeout(() => scrollToLine(reveal.line), 0)
+    return () => clearTimeout(timer)
+  }, [reveal, fileName, ready, scrollToLine])
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -34,14 +52,17 @@ export function YamlEditor({ value, onChange, diagnostics = [], onPrettify = nul
         <CodeEditor
           value={value}
           onChange={onChange}
-          language="yaml"
+          language={language}
+          onCursor={onCursor}
           onView={(view) => {
             viewRef.current = view
-            onView?.(view)
+            setReady(true)
           }}
         />
       </div>
-      <ErrorConsole diagnostics={diagnostics} onSelectLine={(item) => scrollToLine(item.line)} />
+      {diagnostics ? (
+        <ErrorConsole diagnostics={diagnostics} onSelectLine={(item) => scrollToLine(item.line)} />
+      ) : null}
     </div>
   )
 }

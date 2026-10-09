@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { YamlEditor } from '@/components/editor/YamlEditor'
+import { SourceEditor } from '@/components/editor/SourceEditor'
 import { parseProjectManifest, resolveProjectPatterns } from '@/lib/model/projectManifest'
 import { prettifyFile } from '@/lib/model/prettify'
 import { useTranslation } from '@/lib/i18n'
@@ -41,6 +41,13 @@ export function ProjectEditor({ fileName, text, onChange, entries }) {
   const prettify = () => onChange(prettifyFile(text))
 
   return (
-    <YamlEditor value={text} onChange={onChange} diagnostics={diagnostics} onPrettify={prettify} />
+    <SourceEditor
+      language="yaml"
+      fileName={fileName}
+      value={text}
+      onChange={onChange}
+      diagnostics={diagnostics}
+      onPrettify={prettify}
+    />
   )
 }

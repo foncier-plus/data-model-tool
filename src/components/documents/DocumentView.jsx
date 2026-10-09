@@ -1,9 +1,8 @@
 import { useMemo } from 'react'
-import { FolderOpen, PanelLeft, PanelRight } from 'lucide-react'
+import { Boxes } from 'lucide-react'
 import { useProjectStore } from '@/lib/store/useProjectStore'
 import { classifyFile } from '@/lib/fs/documentType'
 import { useTranslation } from '@/lib/i18n'
-import { cn } from '@/lib/utils'
 import { GraphView } from '@/components/graph/GraphView'
 import { DocumentBreadcrumb } from './DocumentBreadcrumb'
 import { YamlDocumentView } from './YamlDocumentView'
@@ -14,69 +13,34 @@ import { ImageDocumentView } from './ImageDocumentView'
 import { parseProjectManifest, resolveProjectPatterns } from '@/lib/model/projectManifest'
 import { headingPathAtLine } from '@/lib/model/wiki'
 
-function SideToggle({ side, collapsed, onToggle }) {
+function EmptyState() {
   const { t } = useTranslation()
-  if (!onToggle) return null
-  const isLeft = side === 'left'
-  const Icon = isLeft ? PanelLeft : PanelRight
-  const label = isLeft
-    ? t(collapsed ? 'view.showExplorer' : 'view.hideExplorer')
-    : t(collapsed ? 'panel.show' : 'panel.hide')
-  return (
-    <button
-      type="button"
-      title={label}
-      aria-label={label}
-      aria-pressed={!collapsed}
-      onClick={onToggle}
-      className={cn(
-        'absolute top-1/2 z-20 flex h-12 w-5 -translate-y-1/2 items-center justify-center bg-sidebar text-muted-foreground transition-colors hover:bg-primary hover:text-primary-foreground',
-        isLeft ? 'left-0 rounded-r-lg' : 'right-0 rounded-l-lg',
-      )}
-    >
-      <Icon className="size-3.5" />
-    </button>
-  )
-}
-
-function collectProjects(node, out = []) {
-  for (const child of node?.children ?? []) {
-    if (child.kind === 'directory') collectProjects(child, out)
-    else if (child.type === 'project') out.push(child.path)
-  }
-  return out
-}
-
-function EmptyState({ explorerCollapsed, onToggleExplorer }) {
-  const { t } = useTranslation()
-  const tree = useProjectStore((state) => state.tree)
+  const projects = useProjectStore((state) => state.projects)
   const openFile = useProjectStore((state) => state.openFile)
-  const projects = useMemo(() => collectProjects(tree), [tree])
+
+  if (projects.length === 0) {
+    return (
+      <div className="flex h-full items-center justify-center p-6 text-center text-xs text-muted-foreground">
+        {t('document.open')}
+      </div>
+    )
+  }
 
   return (
-    <div className="relative flex h-full min-h-0 flex-col">
-      <SideToggle side="left" collapsed={explorerCollapsed} onToggle={onToggleExplorer} />
-      <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 p-6 text-center">
-        <div className="flex flex-col items-center gap-2 text-sm text-muted-foreground">
-          <FolderOpen className="size-5" />
-          <p>{t('launcher.title')}</p>
-        </div>
-        {projects.length > 0 ? (
-          <div className="flex max-h-[60%] w-full max-w-md flex-col gap-1 overflow-auto">
-            {projects.map((path) => (
-              <button
-                key={path}
-                type="button"
-                onClick={() => openFile(path)}
-                className="truncate rounded-md border bg-card px-3 py-2 text-left font-mono text-xs hover:bg-accent"
-              >
-                {path}
-              </button>
-            ))}
-          </div>
-        ) : (
-          <p className="text-xs text-muted-foreground">{t('document.open')}</p>
-        )}
+    <div className="flex h-full min-h-0 items-center justify-center overflow-auto p-6">
+      <div className="flex flex-wrap justify-center gap-3">
+        {projects.map(({ path, name }) => (
+          <button
+            key={path}
+            type="button"
+            title={path}
+            onClick={() => openFile(path)}
+            className="flex w-36 flex-col items-center gap-2 rounded-xl border bg-card p-4 text-center transition-colors hover:border-primary/40 hover:bg-accent"
+          >
+            <Boxes className="size-8 text-orange-400" />
+            <span className="line-clamp-2 w-full text-sm font-medium break-words">{name}</span>
+          </button>
+        ))}
       </div>
     </div>
   )
@@ -92,10 +56,6 @@ export function DocumentView({
   editorFile,
   editorOpen,
   docTarget,
-  explorerCollapsed,
-  onToggleExplorer,
-  panelCollapsed,
-  onTogglePanel,
 }) {
   const { t } = useTranslation()
   const activeFile = useProjectStore((state) => state.activeFile)
@@ -113,14 +73,12 @@ export function DocumentView({
   )
 
   if (!activeFile) {
-    return <EmptyState explorerCollapsed={explorerCollapsed} onToggleExplorer={onToggleExplorer} />
+    return <EmptyState />
   }
 
   if (type === 'pdf' || type === 'image') {
     return (
       <div className="relative h-full min-h-0">
-        <SideToggle side="left" collapsed={explorerCollapsed} onToggle={onToggleExplorer} />
-        <SideToggle side="right" collapsed={panelCollapsed} onToggle={onTogglePanel} />
         {type === 'pdf' ? (
           <PdfDocumentView fileName={activeFile} />
         ) : (
@@ -205,8 +163,6 @@ export function DocumentView({
         </div>
       ) : null}
       <div className="min-w-0 flex-1 overflow-hidden">{view}</div>
-      <SideToggle side="left" collapsed={explorerCollapsed} onToggle={onToggleExplorer} />
-      <SideToggle side="right" collapsed={panelCollapsed} onToggle={onTogglePanel} />
     </div>
   )
 }

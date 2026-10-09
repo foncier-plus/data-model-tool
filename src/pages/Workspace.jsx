@@ -8,13 +8,14 @@ import { ProjectForm } from '@/components/panels/ProjectForm'
 import { MarkdownOutline } from '@/components/panels/MarkdownOutline'
 import { DocumentView } from '@/components/documents/DocumentView'
 import { TopBreadcrumb } from '@/components/documents/TopBreadcrumb'
+import { SideRail } from '@/components/layout/SideRail'
 import {
   flushDocument,
   resetDocumentSessions,
   useActiveDocument,
 } from '@/components/documents/useActiveDocument'
 import { Button } from '@/components/ui/button'
-import { findEntryByObjectName } from '@/lib/selection'
+import { resolveEditorFile, resolveFocus, resolveSidebarKey } from '@/lib/navigation'
 import { classifyFile } from '@/lib/fs/documentType'
 import { useTranslation } from '@/lib/i18n'
 import { useProjectStore } from '@/lib/store/useProjectStore'
@@ -126,13 +127,14 @@ export default function Workspace() {
   const documentEnabled = activeType === 'project' || activeType === 'markdown'
   const activeDocument = useActiveDocument(activeFile, documentEnabled)
 
-  const selectionEntry = selection ? findEntryByObjectName(entries, selection.objectName) : null
-  const editorFile = docTarget?.fileName ?? selectionEntry?.fileName ?? activeFile
+  const focus = resolveFocus(selection, docTarget)
+  const editorFile = resolveEditorFile({ activeFile, entries, selection, docTarget })
   const editorType = editorFile ? classifyFile(editorFile) : null
   const editorDocument = useActiveDocument(
     editorFile,
     editorType === 'project' || editorType === 'markdown',
   )
+  const sidebarKey = resolveSidebarKey(activeType, focus)
 
   const showSidebar =
     activeType === 'yaml' || activeType === 'project' || activeType === 'markdown'
@@ -172,13 +174,16 @@ export default function Workspace() {
   }
 
   const renderSidebar = () => {
-    if (docTarget) {
-      return <MarkdownOutline fileName={docTarget.fileName} text={editorDocument.text} />
+    if (sidebarKey === 'outline') {
+      const isDoc = focus?.type === 'document'
+      return (
+        <MarkdownOutline
+          fileName={isDoc ? docTarget.fileName : activeFile}
+          text={isDoc ? editorDocument.text : activeDocument.text}
+        />
+      )
     }
-    if (activeType === 'markdown') {
-      return <MarkdownOutline fileName={activeFile} text={activeDocument.text} />
-    }
-    if (activeType === 'project' && !selection) {
+    if (sidebarKey === 'project') {
       return (
         <ProjectForm
           fileName={activeFile}
@@ -225,12 +230,7 @@ export default function Workspace() {
 
         <div className="flex min-w-0 flex-1 items-center justify-center gap-2 overflow-hidden px-4">
           {activeFile ? (
-            <TopBreadcrumb
-              fileName={activeFile}
-              selection={selection}
-              docTarget={docTarget}
-              onSelectFile={focusFileContext}
-            />
+            <TopBreadcrumb fileName={activeFile} focus={focus} onSelectFile={focusFileContext} />
           ) : null}
         </div>
 
@@ -256,28 +256,24 @@ export default function Workspace() {
         </div>
       </header>
 
-      <div className="flex min-h-0 flex-1 overflow-hidden">
+      <div className="flex min-h-0 flex-1">
         {!explorerCollapsed ? <ExplorerPanel width={explorerWidth} /> : null}
-        {!explorerCollapsed ? (
-          <div
-            role="separator"
-            aria-orientation="vertical"
-            onMouseDown={(event) =>
-              startResize(event, {
-                width: explorerWidth,
-                setWidth: setExplorerWidth,
-                min: 200,
-                max: 520,
-                invert: false,
-              })
-            }
-            className="group flex w-1.5 shrink-0 cursor-col-resize items-center justify-center"
-          >
-            <span className="h-full w-px bg-border transition-all group-hover:w-0.5 group-hover:bg-primary" />
-          </div>
-        ) : null}
+        <SideRail
+          side="left"
+          collapsed={explorerCollapsed}
+          onToggle={() => setExplorerCollapsed((value) => !value)}
+          onResize={(event) =>
+            startResize(event, {
+              width: explorerWidth,
+              setWidth: setExplorerWidth,
+              min: 200,
+              max: 520,
+              invert: false,
+            })
+          }
+        />
 
-        <main className="h-full min-h-0 flex-1 overflow-hidden">
+        <main className="h-full min-h-0 min-w-0 flex-1 overflow-hidden">
           <DocumentView
             entries={entries}
             selection={selection}
@@ -288,19 +284,16 @@ export default function Workspace() {
             editorFile={editorFile}
             editorOpen={editorOpen}
             docTarget={docTarget}
-            explorerCollapsed={explorerCollapsed}
-            onToggleExplorer={() => setExplorerCollapsed((value) => !value)}
-            panelCollapsed={panelCollapsed}
-            onTogglePanel={showSidebar ? () => setPanelCollapsed((value) => !value) : null}
           />
         </main>
 
-        {showSidebar && !panelCollapsed ? (
+        {showSidebar ? (
           <>
-            <div
-              role="separator"
-              aria-orientation="vertical"
-              onMouseDown={(event) =>
+            <SideRail
+              side="right"
+              collapsed={panelCollapsed}
+              onToggle={() => setPanelCollapsed((value) => !value)}
+              onResize={(event) =>
                 startResize(event, {
                   width: panelWidth,
                   setWidth: setPanelWidth,
@@ -309,17 +302,16 @@ export default function Workspace() {
                   invert: true,
                 })
               }
-              className="group flex w-1.5 shrink-0 cursor-col-resize items-center justify-center"
-            >
-              <span className="h-full w-px bg-border transition-all group-hover:w-0.5 group-hover:bg-primary" />
-            </div>
+            />
 
-            <aside
-              style={{ width: panelWidth }}
-              className="sidebar-panel flex h-full min-h-0 shrink-0 flex-col overflow-hidden border-l bg-sidebar"
-            >
-              <div className="min-h-0 flex-1 overflow-hidden">{renderSidebar()}</div>
-            </aside>
+            {!panelCollapsed ? (
+              <aside
+                style={{ width: panelWidth }}
+                className="sidebar-panel flex h-full min-h-0 shrink-0 flex-col overflow-hidden bg-sidebar"
+              >
+                <div className="min-h-0 flex-1 overflow-hidden">{renderSidebar()}</div>
+              </aside>
+            ) : null}
           </>
         ) : null}
       </div>

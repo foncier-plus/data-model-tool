@@ -21,7 +21,7 @@ afterEach(() => {
 describe('TopBreadcrumb', () => {
   it('shows the file name without directory or type extension', () => {
     useProjectStore.setState({ entries: ENTRIES })
-    render(<TopBreadcrumb fileName="dir/model.object.yaml" selection={null} docTarget={null} />)
+    render(<TopBreadcrumb fileName="dir/model.object.yaml" focus={null} />)
     expect(screen.getByText('model')).toBeTruthy()
     expect(screen.queryByText('dir')).toBeNull()
     expect(screen.queryByText('model.object')).toBeNull()
@@ -36,7 +36,12 @@ describe('TopBreadcrumb', () => {
       attributeName: 'id',
       ref: 'sales.client.id',
     }
-    render(<TopBreadcrumb fileName="dir/model.object.yaml" selection={selection} docTarget={null} />)
+    render(
+      <TopBreadcrumb
+        fileName="dir/model.object.yaml"
+        focus={{ type: 'element', selection }}
+      />,
+    )
 
     expect(screen.getByText('client')).toBeTruthy()
     expect(screen.queryByText('sales.client')).toBeNull()

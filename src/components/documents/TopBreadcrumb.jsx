@@ -60,19 +60,24 @@ function docItems(docTarget) {
 }
 
 // Top-bar breadcrumb: the main document (solid background) followed by the
-// selected element or documentation target (lighter background).
-export function TopBreadcrumb({ fileName, selection, docTarget, onSelectFile }) {
+// focused element or documentation target (lighter background).
+export function TopBreadcrumb({ fileName, focus, onSelectFile }) {
   const select = useProjectStore((state) => state.select)
   const entries = useProjectStore((state) => state.entries)
   const file = fileName.split('/').pop()
   const { Icon: FileIcon, text } = fileVisual(classifyFile(file))
   const { base } = splitFileName(file)
+
+  const selection = focus?.type === 'element' ? focus.selection : null
   const entry = selection
     ? entries.find((item) => (item.qualifiedName ?? item.model?.name) === selection.objectName)
     : null
   const objectLabel = entry?.model?.name ?? selection?.objectName
-  const items = docTarget ? docItems(docTarget) : selectionItems(selection, objectLabel)
-  const interactive = !docTarget
+  const items =
+    focus?.type === 'document'
+      ? docItems(focus.target)
+      : selectionItems(selection, objectLabel)
+  const interactive = focus?.type !== 'document'
 
   return (
     <div className="flex min-w-0 items-center gap-1">

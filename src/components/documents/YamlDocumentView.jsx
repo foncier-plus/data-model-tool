@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { YamlEditor } from '@/components/editor/YamlEditor'
+import { SourceEditor } from '@/components/editor/SourceEditor'
 import { useProjectStore } from '@/lib/store/useProjectStore'
 import { parseObjectFile } from '@/lib/model/parse'
 import { prettifyFile } from '@/lib/model/prettify'
@@ -32,12 +32,9 @@ export function YamlDocumentView({ fileName }) {
   const file = useProjectStore((state) => state.files.find((item) => item.fileName === fileName))
   const tree = useProjectStore((state) => state.tree)
   const applySource = useProjectStore((state) => state.applySource)
-  const reveal = useProjectStore((state) => state.reveal)
   const storedContent = file?.content ?? ''
   const [text, setText] = useState(() => storedContent)
   const lastApplied = useRef(storedContent)
-  const viewRef = useRef(null)
-  const [viewReady, setViewReady] = useState(false)
 
   const filePaths = useMemo(() => collectPaths(tree), [tree])
   const parsed = useMemo(() => parseObjectFile(fileName, text), [fileName, text])
@@ -52,8 +49,7 @@ export function YamlDocumentView({ fileName }) {
   )
 
   // Keep the editor in sync when the file content is updated elsewhere
-  // (e.g. an object/group/attribute property edited from the side panel),
-  // so a semi-manual edit never applies a stale document.
+  // (e.g. an object/group/attribute property edited from the side panel).
   useEffect(() => {
     if (storedContent === lastApplied.current) return
     lastApplied.current = storedContent
@@ -97,21 +93,6 @@ export function YamlDocumentView({ fileName }) {
     return items
   }, [text, parsed, filePaths, fileName])
 
-  const scrollToLine = useCallback((line) => {
-    const view = viewRef.current
-    if (!view || !line) return
-    const clamped = Math.min(Math.max(1, line), view.state.doc.lines)
-    const info = view.state.doc.line(clamped)
-    view.dispatch({ selection: { anchor: info.from }, scrollIntoView: true })
-    view.focus()
-  }, [])
-
-  useEffect(() => {
-    if (!reveal || reveal.fileName !== fileName) return undefined
-    const timer = setTimeout(() => scrollToLine(reveal.line), 0)
-    return () => clearTimeout(timer)
-  }, [reveal, fileName, viewReady, scrollToLine])
-
   const prettify = () => {
     const next = prettifyFile(text)
     setText(next)
@@ -119,15 +100,13 @@ export function YamlDocumentView({ fileName }) {
   }
 
   return (
-    <YamlEditor
+    <SourceEditor
+      language="yaml"
+      fileName={fileName}
       value={text}
       onChange={setText}
       diagnostics={diagnostics}
       onPrettify={prettify}
-      onView={(view) => {
-        viewRef.current = view
-        setViewReady(true)
-      }}
     />
   )
 }

@@ -10,6 +10,8 @@ import { entryIdentity, normalizeNamespace, parseObjectDocument, parseObjectFile
 import { headingPath, headingSlugs, resolveWikiPath, slugify } from '@/lib/model/wiki.js'
 import { findEntryByObjectName } from '@/lib/selection.js'
 import { blankObjectFile, blankProjectFile, serializeObjects } from '@/lib/model/serialize.js'
+import { parseProjectManifest } from '@/lib/model/projectManifest.js'
+import { splitFileName } from '@/lib/fs/documentType.js'
 import {
   addAttribute,
   addGroup,
@@ -43,6 +45,14 @@ function collectYamlPaths(node, paths = []) {
   for (const child of node.children ?? []) {
     if (child.kind === 'directory') collectYamlPaths(child, paths)
     else if (child.type === 'yaml') paths.push(child.path)
+  }
+  return paths
+}
+
+function collectProjectPaths(node, paths = []) {
+  for (const child of node.children ?? []) {
+    if (child.kind === 'directory') collectProjectPaths(child, paths)
+    else if (child.type === 'project') paths.push(child.path)
   }
   return paths
 }
@@ -121,6 +131,13 @@ export const useProjectStore = create((set, get) => {
       const current = get().selection
       const selection =
         current && findEntry(entries, current.objectName) ? current : null
+      const projects = []
+      for (const fileName of collectProjectPaths(tree)) {
+        const content = await fs.readText(directoryHandle, fileName).catch(() => '')
+        const manifest = parseProjectManifest(fileName, content)
+        const fallback = splitFileName(fileName.split('/').pop()).base
+        projects.push({ path: fileName, name: manifest.title || fallback })
+      }
       let markdownCss = ''
       try {
         if (await fs.exists(directoryHandle, 'markdown.css')) {
@@ -135,6 +152,7 @@ export const useProjectStore = create((set, get) => {
         tree,
         files,
         entries,
+        projects,
         selection,
         markdownCss,
         status: 'idle',
@@ -188,6 +206,7 @@ export const useProjectStore = create((set, get) => {
     tree: null,
     files: [],
     entries: [],
+    projects: [],
     markdownCss: '',
     activeFile: null,
     anchor: null,
@@ -241,6 +260,7 @@ export const useProjectStore = create((set, get) => {
         tree: null,
         files: [],
         entries: [],
+        projects: [],
         markdownCss: '',
         activeFile: null,
         selection: null,

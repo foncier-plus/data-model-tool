@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
@@ -7,6 +7,7 @@ import rehypeRaw from 'rehype-raw'
 import { Settings } from 'lucide-react'
 import 'katex/dist/katex.min.css'
 import { CodeEditor } from '@/components/editor/CodeEditor'
+import { SourceEditor } from '@/components/editor/SourceEditor'
 import {
   Dialog,
   DialogContent,
@@ -60,35 +61,13 @@ const COMPONENTS = {
 }
 
 export function MarkdownEditor({ fileName, text, onChange, onCursor }) {
-  const reveal = useProjectStore((state) => state.reveal)
-  const viewRef = useRef(null)
-  const [ready, setReady] = useState(false)
-
-  const scrollToLine = useCallback((line) => {
-    const view = viewRef.current
-    if (!view || !line) return
-    const clamped = Math.min(Math.max(1, line), view.state.doc.lines)
-    const info = view.state.doc.line(clamped)
-    view.dispatch({ selection: { anchor: info.from }, scrollIntoView: true })
-    view.focus()
-  }, [])
-
-  useEffect(() => {
-    if (!reveal || reveal.fileName !== fileName) return undefined
-    const timer = setTimeout(() => scrollToLine(reveal.line), 0)
-    return () => clearTimeout(timer)
-  }, [reveal, fileName, ready, scrollToLine])
-
   return (
-    <CodeEditor
+    <SourceEditor
+      language="markdown"
+      fileName={fileName}
       value={text}
       onChange={onChange}
-      language="markdown"
       onCursor={onCursor}
-      onView={(view) => {
-        viewRef.current = view
-        setReady(true)
-      }}
     />
   )
 }
